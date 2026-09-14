@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { goalsStorage } from '../../services/storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { calculateTargetCTL } from '../../components/profile/GoalsTab';
 import { Card } from '../../components/ui/Card';
@@ -185,22 +185,25 @@ export default function PlanningHomeScreen() {
 
   useEffect(() => {
     let isMounted = true;
+    setActiveGoals([]);
+
+    if (!user?.id) {
+      return;
+    }
+
     const loadGoals = async () => {
       try {
-        const cachedRaw = await AsyncStorage.getItem('rooka_user_goals');
-        if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw);
-          if (isMounted && Array.isArray(cached) && cached.length > 0) {
-            setActiveGoals(
-              cached.map((m: any) => ({
-                name: m.name || m.eventName || 'Goal',
-                date: m.date || m.eventDate || new Date().toISOString().split('T')[0],
-                isMain: m.is_main === 1 || Boolean(m.isARace),
-                goalType: (m.goal_type || m.goalType || 'physiological') as 'race' | 'physiological',
-                targetCTL: m.target_ctl || m.targetCtl || (m.name ? calculateTargetCTL(m.name) : 70),
-              }))
-            );
-          }
+        const cached = await goalsStorage.getGoals(user.id);
+        if (cached && isMounted && Array.isArray(cached) && cached.length > 0) {
+          setActiveGoals(
+            cached.map((m: any) => ({
+              name: m.name || m.eventName || 'Goal',
+              date: m.date || m.eventDate || new Date().toISOString().split('T')[0],
+              isMain: m.is_main === 1 || Boolean(m.isARace),
+              goalType: (m.goal_type || m.goalType || 'race') as 'race' | 'physiological',
+              targetCTL: m.target_ctl || m.targetCtl || (m.name ? calculateTargetCTL(m.name) : 70),
+            }))
+          );
         }
       } catch (_) { }
 
@@ -211,28 +214,37 @@ export default function PlanningHomeScreen() {
             name: m.name || m.eventName || 'Goal',
             date: m.date || m.eventDate || new Date().toISOString().split('T')[0],
             isMain: m.is_main === 1 || Boolean(m.isARace),
-            goalType: (m.goal_type || m.goalType || 'physiological') as 'race' | 'physiological',
+            goalType: (m.goal_type || m.goalType || 'race') as 'race' | 'physiological',
             targetCTL: m.target_ctl || m.targetCtl || (m.name ? calculateTargetCTL(m.name) : 70),
           }));
           setActiveGoals(mapped);
-          await AsyncStorage.setItem('rooka_user_goals', JSON.stringify(milestones));
+          await goalsStorage.setGoals(milestones, user.id);
           return;
         }
       } catch (e) {
         console.log('Failed to fetch milestones in Planning screen:', e);
       }
 
-      if (isMounted && (user?.target_event || user?.event_date || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological')) {
-        const isPhys = (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological';
+      const hasEventGoal = Boolean(user?.target_event && user.target_event.trim().length > 0);
+      const hasPhysGoal = Boolean(
+        (user?.target_weight && Number(user.target_weight) > 0) ||
+        (user?.target_vo2max && Number(user.target_vo2max) > 0)
+      );
+
+      if (isMounted && (hasEventGoal || hasPhysGoal)) {
+        const isPhys = hasPhysGoal || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological';
         setActiveGoals([
           {
-            name: user?.target_event || (isPhys ? 'Physiological Goal' : 'Target Goal'),
+            name: user?.target_event || (isPhys ? 'Health & Fitness Goal' : 'Target Goal'),
             date: user?.event_date || new Date().toISOString().split('T')[0],
             isMain: true,
             goalType: (isPhys ? 'physiological' : 'race') as 'race' | 'physiological',
             targetCTL: user?.target_ctl || 70,
           },
         ]);
+      } else if (isMounted) {
+        setActiveGoals([]);
+        await goalsStorage.setGoals([], user.id);
       }
     };
 
@@ -240,15 +252,21 @@ export default function PlanningHomeScreen() {
     return () => {
       isMounted = false;
     };
-  }, [user?.id, user?.target_event, user?.event_date, (user as any)?.goal_type, (user as any)?.goalType]);
+  }, [user?.id, user?.target_event, user?.event_date, user?.target_weight, user?.target_vo2max, (user as any)?.goal_type, (user as any)?.goalType]);
 
   const nearestGoalInfo = useMemo(() => {
     if (!activeGoals || activeGoals.length === 0) {
-      if (user?.target_event || user?.event_date || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological') {
-        const isPhys = (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological';
+      const hasEventGoal = Boolean(user?.target_event && user.target_event.trim().length > 0);
+      const hasPhysGoal = Boolean(
+        (user?.target_weight && Number(user.target_weight) > 0) ||
+        (user?.target_vo2max && Number(user.target_vo2max) > 0)
+      );
+
+      if (hasEventGoal || hasPhysGoal) {
+        const isPhys = hasPhysGoal || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological';
         const gDate = user?.event_date || new Date().toISOString().split('T')[0];
         return {
-          name: user?.target_event || (isPhys ? 'Physiological Goal' : 'Target Goal'),
+          name: user?.target_event || (isPhys ? 'Health & Fitness Goal' : 'Target Goal'),
           date: gDate,
           isMain: true,
           goalType: (isPhys ? 'physiological' : ((user as any)?.goal_type || (user as any)?.goalType || 'race')) as 'race' | 'physiological',
@@ -280,7 +298,7 @@ export default function PlanningHomeScreen() {
     });
 
     return pool[0] || null;
-  }, [activeGoals, user?.target_event, user?.event_date, user?.target_ctl]);
+  }, [activeGoals, user?.target_event, user?.event_date, user?.target_ctl, user?.target_weight, user?.target_vo2max]);
 
   const hasSeasonGoal = Boolean(nearestGoalInfo && nearestGoalInfo.name);
   const isPhysiologicalGoal = nearestGoalInfo?.goalType === 'physiological';

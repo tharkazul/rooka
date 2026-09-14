@@ -368,9 +368,11 @@ router.post('/finalize', authenticateToken, async (req, res) => {
       : (req.body.target_weight !== undefined && req.body.target_weight !== null && req.body.target_weight !== '')
         ? parseFloat(req.body.target_weight)
         : null;
-    const finalEventName = targetEvent || (reqGoalType === 'physiological' ? 'Physiological Goal' : null);
+    const cleanEventName = (targetEvent && typeof targetEvent === 'string') ? targetEvent.trim() : '';
+    const hasRealGoal = Boolean(cleanEventName.length > 0 || (reqTargetWeight && reqTargetWeight > 0));
 
-    if (finalEventName || reqTargetWeight || reqGoalType === 'physiological') {
+    if (hasRealGoal) {
+      const finalEventName = cleanEventName || (reqGoalType === 'physiological' ? 'Physiological Goal' : 'Target Goal');
       await new Promise((resolve) => {
         db.run(
           `DELETE FROM milestones WHERE user_id = ? AND is_main = 1`,
@@ -380,7 +382,7 @@ router.post('/finalize', authenticateToken, async (req, res) => {
               `INSERT INTO milestones (user_id, name, date, target_ctl, is_main, goal_type, target_mode, target_value, target_weight) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
               [
                 userId,
-                finalEventName || 'Physiological Goal',
+                finalEventName,
                 eventDate || '',
                 parseFloat(targetCtl || (reqGoalType === 'physiological' ? 70 : 90)),
                 reqGoalType,
@@ -392,6 +394,10 @@ router.post('/finalize', authenticateToken, async (req, res) => {
             );
           }
         );
+      });
+    } else {
+      await new Promise((resolve) => {
+        db.run(`DELETE FROM milestones WHERE user_id = ? AND is_main = 1`, [userId], () => resolve());
       });
     }
 

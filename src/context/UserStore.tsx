@@ -2,10 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { UserProfile } from '../types/user';
 import { userApi, authApi } from '../services/apiServices';
 import { ApiError, setAuthToken, setOnUnauthorizedHandler, setOnRateLimitHandler } from '../services/apiClient';
-import { tokenStorage, chatStorage, briefingStorage, profileStorage } from '../services/storage';
+import { tokenStorage, chatStorage, briefingStorage, profileStorage, goalsStorage } from '../services/storage';
 import { unregisterPushNotificationsAsync } from '../services/notificationService';
 import { wsService } from '../services/websocket';
 import { realtimeEngine } from '../realtime/realtimeEngine';
+import { getGoogleSignin } from '../services/googleAuth';
 
 interface UserContextType {
   user: UserProfile | null;
@@ -21,6 +22,7 @@ interface UserContextType {
     email?: string | null;
     fullName?: { givenName?: string | null; familyName?: string | null } | null;
   }) => Promise<{ isNewUser?: boolean }>;
+  loginWithGoogle: () => Promise<{ isNewUser?: boolean } | undefined>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   logout: (reason?: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -76,6 +78,8 @@ const normalizeProfile = (data: any, prev?: UserProfile | null): UserProfile => 
     targetWeight: data?.targetWeight ?? data?.target_weight ?? (isSameUser ? prev?.targetWeight : undefined),
     target_vo2max: data?.targetVo2max ?? data?.target_vo2max ?? (isSameUser ? prev?.target_vo2max : undefined),
     targetVo2max: data?.targetVo2max ?? data?.target_vo2max ?? (isSameUser ? prev?.targetVo2max : undefined),
+    training_availability: data?.training_availability ?? data?.trainingAvailability ?? (isSameUser ? (prev as any)?.training_availability : undefined),
+    trainingAvailability: data?.trainingAvailability ?? data?.training_availability ?? (isSameUser ? (prev as any)?.trainingAvailability : undefined),
   };
 };
 
@@ -87,6 +91,20 @@ export const UserStore: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const loggingOutRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const googleSignin = getGoogleSignin();
+      if (googleSignin) {
+        googleSignin.configure({
+          webClientId: '226225996905-91f8dpuh4hn6rvpqgkfo36mcdc9n22rd.apps.googleusercontent.com',
+          iosClientId: '226225996905-cmhh8e7hdon643oliukl5bl7vta26hf6.apps.googleusercontent.com',
+        });
+      }
+    } catch (e) {
+      console.warn('GoogleSignin.configure error:', e);
+    }
+  }, []);
 
 
   const logout = React.useCallback(async (reason?: string) => {
@@ -113,6 +131,7 @@ export const UserStore: React.FC<{ children: ReactNode }> = ({ children }) => {
     await profileStorage.removeProfile();
     if (chatStorage.clearChatHistory) await chatStorage.clearChatHistory(currentUserId);
     if (briefingStorage.clearBriefing) await briefingStorage.clearBriefing();
+    if (goalsStorage.clearGoals) await goalsStorage.clearGoals(currentUserId);
     setUser(null);
     setIsAuthenticated(false);
     setError(typeof reason === 'string' ? reason : null);
@@ -266,6 +285,49 @@ export const UserStore: React.FC<{ children: ReactNode }> = ({ children }) => {
     },
     [loginWithToken]
   );
+
+  const loginWithGoogle = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const googleSignin = getGoogleSignin();
+      if (!googleSignin) {
+        throw new Error(
+          'Google Sign-In is not supported in Expo Go. Please use a development build or sign in with email/password.'
+        );
+      }
+      await googleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await googleSignin.signIn();
+      const idToken = response?.data?.idToken || (response as any)?.idToken;
+      if (!idToken) {
+        throw new Error('Google Sign-In failed: No ID token returned.');
+      }
+
+      const res = await authApi.googleLogin({
+        idToken,
+        user: response?.data?.user || (response as any)?.user,
+      });
+
+      if (res && res.token) {
+        await loginWithToken(res.token);
+        return { isNewUser: res.isNewUser };
+      }
+      throw new Error('No authentication token returned by server.');
+    } catch (err: any) {
+      if (
+        err?.code === 'SIGN_IN_CANCELLED' ||
+        err?.code === '13' ||
+        err?.message?.toLowerCase().includes('cancelled')
+      ) {
+        return;
+      }
+      const msg = err?.message || 'Google Sign-In failed.';
+      setError(msg);
+      throw err instanceof Error ? err : new Error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [loginWithToken]);
 
   const refreshUser = React.useCallback(async () => {
     try {
@@ -444,6 +506,7 @@ export const UserStore: React.FC<{ children: ReactNode }> = ({ children }) => {
         register,
         loginWithToken,
         loginWithApple,
+        loginWithGoogle,
         resetPassword,
         logout,
         refreshUser,

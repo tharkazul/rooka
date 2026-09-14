@@ -279,3 +279,57 @@ export const chatReadStorage = {
     } catch (e) {}
   },
 };
+
+const GOALS_KEY = 'rooka_user_goals';
+
+export const goalsStorage = {
+  async getGoals(userId?: string | number): Promise<any[] | null> {
+    if (!userId) return null;
+    const key = `${GOALS_KEY}_${userId}`;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const raw = window.localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : null;
+        }
+        return null;
+      }
+      const raw = await AsyncStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async setGoals(goals: any[], userId?: string | number): Promise<void> {
+    if (!userId) return;
+    const key = `${GOALS_KEY}_${userId}`;
+    try {
+      const data = JSON.stringify(goals || []);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(key, data);
+          window.localStorage.removeItem(GOALS_KEY);
+        }
+        return;
+      }
+      await AsyncStorage.setItem(key, data);
+      await AsyncStorage.removeItem(GOALS_KEY).catch(() => {});
+    } catch (e) {}
+  },
+
+  async clearGoals(userId?: string | number): Promise<void> {
+    const key = userId ? `${GOALS_KEY}_${userId}` : GOALS_KEY;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem(key);
+          if (userId) window.localStorage.removeItem(GOALS_KEY);
+        }
+      } else {
+        await AsyncStorage.removeItem(key);
+        if (userId) await AsyncStorage.removeItem(GOALS_KEY);
+      }
+    } catch (e) {}
+  },
+};

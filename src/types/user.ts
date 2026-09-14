@@ -31,11 +31,13 @@ export interface UserProfile {
   targetMode?: string;
   target_value?: string;
   targetValue?: string;
-  target_weight?: number | string;
-  targetWeight?: number | string;
-  target_vo2max?: number | string;
-  targetVo2max?: number | string;
+  target_weight?: number | string | null;
+  targetWeight?: number | string | null;
+  target_vo2max?: number | string | null;
+  targetVo2max?: number | string | null;
   daily_availability?: Record<string, number>; // e.g. { MON: 45, TUE: 45, WED: 60, THU: 45, FRI: 60, SAT: 90, SUN: 45 }
+  training_availability?: Record<string, { available: boolean; maxMinutes: number }> | string;
+  trainingAvailability?: Record<string, { available: boolean; maxMinutes: number }> | string;
   athlete_metrics?: {
     max_hr?: number;
     resting_hr?: number;
@@ -73,5 +75,18 @@ export interface GoalMilestone {
   target_vo2max?: number | string;
   targetVo2max?: number | string;
   artwork_url?: string;
+}
+
+export interface RecurringTraining {
+  id: number | string;
+  user_id?: number;
+  title: string;
+  day_of_week: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | string;
+  start_time?: string;
+  duration_minutes: number;
+  sport: string;
+  intensity?: 'easy' | 'moderate' | 'hard' | string;
+  is_active?: boolean | number;
+  created_at?: string;
 }
 

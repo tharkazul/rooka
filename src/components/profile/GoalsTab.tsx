@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { goalsStorage } from '../../services/storage';
 import { useUser } from '../../context/UserStore';
 import { gamificationApi, userApi } from '../../services/apiServices';
 import { Card } from '../ui/Card';
@@ -63,26 +63,29 @@ export const GoalsTab: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
+    setMilestones([]);
+
+    if (!user?.id) {
+      return;
+    }
+
     const loadMilestones = async () => {
       try {
-        const cachedRaw = await AsyncStorage.getItem('rooka_user_goals');
-        if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw);
-          if (isMounted && Array.isArray(cached) && cached.length > 0) {
-            setMilestones(
-              cached.map((m: any) => ({
-                id: m.id?.toString() || Date.now().toString() + Math.random(),
-                isARace: m.is_main === 1 || Boolean(m.isARace),
-                goalType: (m.goal_type || m.goalType || 'physiological') as 'race' | 'physiological',
-                eventName: m.name || m.eventName || '',
-                eventDate: m.date || m.eventDate || new Date().toISOString().split('T')[0],
-                targetMode: (m.target_mode || m.targetMode || 'finish') as 'finish' | 'time',
-                targetValue: m.target_value || m.targetValue || '',
-                targetWeight: m.target_weight ? m.target_weight.toString() : m.targetWeight ? m.targetWeight.toString() : '',
-                targetVo2max: m.target_vo2max ? m.target_vo2max.toString() : m.targetVo2max ? m.targetVo2max.toString() : '',
-              }))
-            );
-          }
+        const cached = await goalsStorage.getGoals(user.id);
+        if (cached && isMounted && Array.isArray(cached) && cached.length > 0) {
+          setMilestones(
+            cached.map((m: any) => ({
+              id: m.id?.toString() || Date.now().toString() + Math.random(),
+              isARace: m.is_main === 1 || Boolean(m.isARace),
+              goalType: (m.goal_type || m.goalType || 'race') as 'race' | 'physiological',
+              eventName: m.name || m.eventName || '',
+              eventDate: m.date || m.eventDate || new Date().toISOString().split('T')[0],
+              targetMode: (m.target_mode || m.targetMode || 'finish') as 'finish' | 'time',
+              targetValue: m.target_value || m.targetValue || '',
+              targetWeight: m.target_weight ? m.target_weight.toString() : m.targetWeight ? m.targetWeight.toString() : '',
+              targetVo2max: m.target_vo2max ? m.target_vo2max.toString() : m.targetVo2max ? m.targetVo2max.toString() : '',
+            }))
+          );
         }
       } catch (_) {}
 
@@ -92,7 +95,7 @@ export const GoalsTab: React.FC = () => {
           const mapped = rows.map((m: any) => ({
             id: m.id?.toString() || Date.now().toString() + Math.random(),
             isARace: m.is_main === 1,
-            goalType: (m.goal_type || m.goalType || 'physiological') as 'race' | 'physiological',
+            goalType: (m.goal_type || m.goalType || 'race') as 'race' | 'physiological',
             eventName: m.name || '',
             eventDate: m.date || new Date().toISOString().split('T')[0],
             targetMode: (m.target_mode || 'finish') as 'finish' | 'time',
@@ -101,27 +104,41 @@ export const GoalsTab: React.FC = () => {
             targetVo2max: m.target_vo2max ? m.target_vo2max.toString() : '',
           }));
           setMilestones(mapped);
-          await AsyncStorage.setItem('rooka_user_goals', JSON.stringify(rows));
+          await goalsStorage.setGoals(rows, user.id);
           return;
         }
       } catch (err) {
         console.log('Failed to fetch milestones from server, fallback to user profile:', err);
       }
 
-      if (isMounted && (user?.target_event || user?.event_date || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological')) {
-        setMilestones([
+      // Check if user has an actual profile fallback goal (with non-empty name or real weight/vo2max)
+      const hasEventGoal = Boolean(user?.target_event && user.target_event.trim().length > 0);
+      const hasPhysGoal = Boolean(
+        (user?.target_weight && Number(user.target_weight) > 0) ||
+        (user?.target_vo2max && Number(user.target_vo2max) > 0)
+      );
+
+      if (isMounted && (hasEventGoal || hasPhysGoal)) {
+        const isPhys = hasPhysGoal || (user as any)?.goal_type === 'physiological' || (user as any)?.goalType === 'physiological';
+        const fallback = [
           {
             id: '1',
             isARace: true,
-            goalType: ((user as any)?.goal_type || (user as any)?.goalType || 'physiological') as 'race' | 'physiological',
-            eventName: user?.target_event || '',
+            goalType: (isPhys ? 'physiological' : 'race') as 'race' | 'physiological',
+            eventName: user?.target_event || (isPhys ? 'Health & Fitness Goal' : ''),
             eventDate: user?.event_date || new Date().toISOString().split('T')[0],
             targetMode: (((user as any)?.target_mode || (user as any)?.targetMode || 'finish') as 'finish' | 'time'),
             targetValue: (user as any)?.target_value || (user as any)?.targetValue || '',
             targetWeight: (user as any)?.target_weight ? (user as any).target_weight.toString() : (user as any)?.targetWeight ? (user as any).targetWeight.toString() : '',
             targetVo2max: (user as any)?.target_vo2max ? (user as any).target_vo2max.toString() : (user as any)?.targetVo2max ? (user as any).targetVo2max.toString() : '',
           },
-        ]);
+        ];
+        setMilestones(fallback);
+        await goalsStorage.setGoals(fallback, user.id);
+      } else if (isMounted) {
+        // Explicitly clear milestones and storage when server has 0 rows and user has no profile target!
+        setMilestones([]);
+        await goalsStorage.setGoals([], user.id);
       }
     };
 
@@ -203,7 +220,7 @@ export const GoalsTab: React.FC = () => {
 
     try {
       await gamificationApi.saveMilestones(payload);
-      await AsyncStorage.setItem('rooka_user_goals', JSON.stringify(payload));
+      await goalsStorage.setGoals(payload, user?.id);
 
       if (primaryGoal) {
         const calculatedCTL = calculateTargetCTL(primaryGoal.eventName);
@@ -227,8 +244,16 @@ export const GoalsTab: React.FC = () => {
           target_event: '',
           event_date: '',
           target_ctl: 70,
-          goal_type: 'physiological',
-          goalType: 'physiological',
+          goal_type: 'race',
+          goalType: 'race',
+          target_weight: null,
+          targetWeight: null,
+          target_vo2max: null,
+          targetVo2max: null,
+          target_mode: 'finish',
+          targetMode: 'finish',
+          target_value: '',
+          targetValue: '',
         });
       }
 

@@ -255,15 +255,18 @@ router.post("/api/user/settings/coach", authenticateToken, (req, res) => {
 
     if (targetEvent !== undefined || eventDate !== undefined || reqGoalType !== undefined) {
       const finalGoalType = reqGoalType || 'race';
-      const finalName = targetEvent || (finalGoalType === 'physiological' ? 'Physiological Goal' : '');
-      const finalDate = eventDate || '';
-      const finalCtl = targetCtl ? parseFloat(targetCtl) : 70;
-      const finalMode = reqTargetMode || (finalGoalType === 'physiological' ? 'weight' : 'finish');
-      const finalValue = reqTargetValue || '';
+      const cleanEventName = (targetEvent && typeof targetEvent === 'string') ? targetEvent.trim() : '';
       const finalWeight = (reqTargetWeight !== undefined && reqTargetWeight !== null && reqTargetWeight !== '') ? parseFloat(reqTargetWeight) : null;
       const finalVo2 = (reqTargetVo2max !== undefined && reqTargetVo2max !== null && reqTargetVo2max !== '') ? parseFloat(reqTargetVo2max) : null;
+      const hasRealGoal = Boolean(cleanEventName.length > 0 || (finalWeight && finalWeight > 0) || (finalVo2 && finalVo2 > 0));
 
-      if (finalName || finalWeight || finalGoalType === 'physiological') {
+      if (hasRealGoal) {
+        const finalName = cleanEventName || (finalGoalType === 'physiological' ? 'Physiological Goal' : 'Target Goal');
+        const finalDate = eventDate || '';
+        const finalCtl = targetCtl ? parseFloat(targetCtl) : 70;
+        const finalMode = reqTargetMode || (finalGoalType === 'physiological' ? 'weight' : 'finish');
+        const finalValue = reqTargetValue || '';
+
         db.run(
           `DELETE FROM milestones WHERE user_id = ? AND is_main = 1`,
           [req.user.id],
@@ -370,7 +373,7 @@ router.delete('/api/user/account', authenticateToken, (req, res) => {
             "nutrition_intake", "daily_diet_logs", "biometrics",
             "physique_logs", "milestones", "kudos", "public_profile_cache", 
             "completed_micro_steps", "push_subscriptions", "garmin_health_data", 
-            "user_titles", "athlete_niggles", "bonus_points"
+            "user_titles", "athlete_niggles", "bonus_points", "recurring_trainings"
         ];
 
         db.serialize(() => {
@@ -431,6 +434,91 @@ router.post("/api/user/sync-subscription", authenticateToken, (req, res) => {
       }
     );
   }
+});
+
+// Recurring Trainings (Non-Rooka Activities) Endpoints
+router.get("/api/user/recurring-trainings", authenticateToken, (req, res) => {
+  db.all(
+    `SELECT * FROM recurring_trainings 
+     WHERE user_id = ? 
+     ORDER BY CASE day_of_week 
+       WHEN 'Mon' THEN 1 
+       WHEN 'Tue' THEN 2 
+       WHEN 'Wed' THEN 3 
+       WHEN 'Thu' THEN 4 
+       WHEN 'Fri' THEN 5 
+       WHEN 'Sat' THEN 6 
+       WHEN 'Sun' THEN 7 
+       ELSE 8 
+     END, start_time ASC`,
+    [req.user.id],
+    (err, rows) => {
+      if (err) {
+        console.error("Error fetching recurring trainings:", err);
+        return res.status(500).json({ error: "DB_ERROR" });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+router.post("/api/user/recurring-trainings", authenticateToken, (req, res) => {
+  const { id, title, day_of_week, dayOfWeek, start_time, startTime, duration_minutes, durationMinutes, sport, intensity, is_active, isActive } = req.body;
+
+  const finalTitle = (title || "").trim();
+  const finalDay = day_of_week || dayOfWeek || "Mon";
+  const finalStartTime = start_time !== undefined ? start_time : (startTime !== undefined ? startTime : "");
+  const finalDuration = duration_minutes !== undefined ? parseInt(duration_minutes, 10) : (durationMinutes !== undefined ? parseInt(durationMinutes, 10) : 60);
+  const finalSport = (sport || "Other").trim();
+  const finalIntensity = (intensity || "moderate").trim();
+  const finalIsActive = is_active !== undefined ? (is_active ? 1 : 0) : (isActive !== undefined ? (isActive ? 1 : 0) : 1);
+
+  if (!finalTitle) {
+    return res.status(400).json({ error: "Title is required" });
+  }
+
+  if (id) {
+    db.run(
+      `UPDATE recurring_trainings 
+       SET title = ?, day_of_week = ?, start_time = ?, duration_minutes = ?, sport = ?, intensity = ?, is_active = ? 
+       WHERE id = ? AND user_id = ?`,
+      [finalTitle, finalDay, finalStartTime, finalDuration, finalSport, finalIntensity, finalIsActive, id, req.user.id],
+      function (err) {
+        if (err) {
+          console.error("Error updating recurring training:", err);
+          return res.status(500).json({ error: "DB_ERROR" });
+        }
+        res.json({ success: true, id, message: "Recurring training updated" });
+      }
+    );
+  } else {
+    db.run(
+      `INSERT INTO recurring_trainings (user_id, title, day_of_week, start_time, duration_minutes, sport, intensity, is_active) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, finalTitle, finalDay, finalStartTime, finalDuration, finalSport, finalIntensity, finalIsActive],
+      function (err) {
+        if (err) {
+          console.error("Error creating recurring training:", err);
+          return res.status(500).json({ error: "DB_ERROR" });
+        }
+        res.json({ success: true, id: this.lastID, message: "Recurring training created" });
+      }
+    );
+  }
+});
+
+router.delete("/api/user/recurring-trainings/:id", authenticateToken, (req, res) => {
+  db.run(
+    `DELETE FROM recurring_trainings WHERE id = ? AND user_id = ?`,
+    [req.params.id, req.user.id],
+    function (err) {
+      if (err) {
+        console.error("Error deleting recurring training:", err);
+        return res.status(500).json({ error: "DB_ERROR" });
+      }
+      res.json({ success: true, message: "Recurring training deleted" });
+    }
+  );
 });
 
 module.exports = router;
