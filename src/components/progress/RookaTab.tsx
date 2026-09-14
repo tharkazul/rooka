@@ -200,15 +200,10 @@ export const RookaTab: React.FC<RookaTabProps> = ({
       {/* QUESTS LOG */}
       {canAccessQuests(user?.subscription_tier) && (
         <Card className="mb-6 bg-theme-card">
-          <View className="flex-row items-center justify-between mb-3">
-            <View className="flex-row items-center gap-x-2">
-              <View className="w-2.5 h-2.5 rounded-full bg-theme-accent" />
-              <Text className="text-xs font-bold text-theme-muted">
-                {t('dashboard.questsLog')}
-              </Text>
-            </View>
-            <Text className="text-xs text-theme-muted">
-              {activeQuest ? `1 ${t('dashboard.active')}` : '0 active'}
+          <View className="flex-row items-center gap-x-2 mb-3">
+            <View className="w-2.5 h-2.5 rounded-full bg-theme-accent" />
+            <Text className="text-xs font-bold text-theme-muted">
+              {t('dashboard.questsLog')}
             </Text>
           </View>
 
