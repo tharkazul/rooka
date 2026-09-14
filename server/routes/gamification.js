@@ -34,7 +34,9 @@ const {
   triggerLevelUpCoachPrompt,
   evaluateAndProgressQuests,
   calculateQuestProgress,
-  generateQuestForUser
+  generateQuestForUser,
+  isQuestMet,
+  completeQuest
 } = require('../services/utils');
 
 function getTimeRemainingStr(expiresAt) {
@@ -148,130 +150,139 @@ router.get("/api/gamification", authenticateToken, async (req, res) => {
   const responseData = { quests: [], titles: [], bonus_points: [] };
 
   try {
-    await evaluateAndProgressQuests(userId);
+    const rawQuests = await evaluateAndProgressQuests(userId);
     await checkAndAwardRookaTitles(userId);
+
+    const processedQuests = await Promise.all(
+      (rawQuests || []).map(async (q) => {
+        const qObj = { ...q };
+        const currentVal = qObj.current_value !== undefined ? qObj.current_value : (qObj.progress || 0);
+        const targetVal = qObj.target_value || 1;
+
+        // Extra safety check: if an active quest met its target, ensure it is completed and awarded
+        if (qObj.status === "active" && isQuestMet(currentVal, targetVal)) {
+          await completeQuest(userId, qObj);
+        }
+
+        qObj.current_value = currentVal;
+        qObj.progress = currentVal;
+        qObj.progress_percent = Math.min(100, Math.round((currentVal / targetVal) * 100));
+        qObj.time_remaining_str = qObj.status === "active" ? getTimeRemainingStr(qObj.expires_at) : null;
+
+        // Unit string
+        if (qObj.target_metric === "distance_km") qObj.unit = "km";
+        else if (qObj.target_metric === "moving_time_min") qObj.unit = "min";
+        else if (qObj.target_metric === "rooka_score") qObj.unit = "pts";
+        else qObj.unit = "";
+
+        return qObj;
+      })
+    );
+
+    // If an active quest was completed above and no active quest remains, generate replacement
+    const hasActive = processedQuests.some((q) => q.status === "active");
+    if (!hasActive) {
+      try {
+        const refreshed = await evaluateAndProgressQuests(userId);
+        const newActive = refreshed.find((q) => q.status === "active");
+        if (newActive) {
+          newActive.current_value = 0;
+          newActive.progress = 0;
+          newActive.progress_percent = 0;
+          newActive.time_remaining_str = getTimeRemainingStr(newActive.expires_at);
+          if (newActive.target_metric === "distance_km") newActive.unit = "km";
+          else if (newActive.target_metric === "moving_time_min") newActive.unit = "min";
+          else if (newActive.target_metric === "rooka_score") newActive.unit = "pts";
+          else newActive.unit = "";
+          processedQuests.unshift(newActive);
+        }
+      } catch (genErr) {
+        console.error("Error refreshing active quest in /api/gamification:", genErr);
+      }
+    }
+
+    responseData.quests = processedQuests;
   } catch (e) {
     console.error("Error evaluating gamification in /api/gamification:", e);
   }
 
-  // Fix any quest erroneously marked completed after its expiration date
-  db.run(
-    `UPDATE user_quests SET status = 'expired' WHERE user_id = ? AND expires_at IS NOT NULL AND completed_at > expires_at AND status = 'completed'`,
-    [userId]
-  );
+  try {
+    const userRow = await new Promise((resolve) => {
+      db.get(`SELECT subscription_tier FROM users WHERE id = ?`, [userId], (err, row) => resolve(row));
+    });
 
-  // Ensure only 1 active quest per user by closing any older active quests
-  db.run(
-    `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active' AND id NOT IN (SELECT id FROM (SELECT id FROM user_quests WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC, id DESC LIMIT 1))`,
-    [userId, userId],
-    () => {
+    const tier = userRow?.subscription_tier;
+    const isPaid = tier === 'admin' || tier === 'premium' || tier === 'rooka_plus' || tier === 'subscription';
+
+    if (!isPaid) {
+      responseData.titles = [];
+      const points = await new Promise((resolve) => {
+        db.all(
+          `SELECT * FROM bonus_points WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+          [userId],
+          (err, rows) => resolve(rows || [])
+        );
+      });
+      responseData.bonus_points = points;
+      return res.json(responseData);
+    }
+
+    // Evaluate any newly completed milestones or races (e.g. Half Ironman)
+    try {
+      await checkAndAwardRookaTitles(userId);
+      await enforceMaxUserTitles(userId, 5);
+    } catch (eTitle) {
+      console.error("Error evaluating titles on get gamification:", eTitle);
+    }
+
+    const titles = await new Promise((resolve) => {
       db.all(
-        `SELECT * FROM user_quests WHERE user_id = ? ORDER BY created_at DESC`,
+        `SELECT * FROM user_titles WHERE user_id = ? ORDER BY is_active DESC, created_at DESC`,
         [userId],
-        async (err, quests) => {
-          if (!err && quests) {
-            const processedQuests = await Promise.all(
-              quests.map(async (q) => {
-                const qObj = { ...q };
+        (err, rows) => resolve(rows || [])
+      );
+    });
 
-                // Expiry check
-                if (qObj.status === "active" && qObj.expires_at) {
-                  const expiresMs = new Date(qObj.expires_at).getTime();
-                  if (expiresMs <= Date.now()) {
-                    qObj.status = "expired";
-                    db.run(`UPDATE user_quests SET status = 'expired' WHERE id = ?`, [qObj.id]);
-                  }
-                }
-
-                // Calculate progress for active or completed quests
-                const currentVal = await calculateQuestProgress(userId, qObj);
-                qObj.current_value = currentVal;
-                qObj.progress = currentVal;
-                qObj.progress_percent = Math.min(100, Math.round((currentVal / (qObj.target_value || 1)) * 100));
-                qObj.time_remaining_str = qObj.status === "active" ? getTimeRemainingStr(qObj.expires_at) : null;
-
-                // Unit string
-                if (qObj.target_metric === "distance_km") qObj.unit = "km";
-                else if (qObj.target_metric === "moving_time_min") qObj.unit = "min";
-                else if (qObj.target_metric === "rooka_score") qObj.unit = "pts";
-                else qObj.unit = "";
-
-                return qObj;
-              })
-            );
-            responseData.quests = processedQuests;
-          }
-
-          db.get(`SELECT subscription_tier FROM users WHERE id = ?`, [userId], async (errUser, uRow) => {
-            const tier = uRow?.subscription_tier;
-            const isPaid = tier === 'admin' || tier === 'premium' || tier === 'rooka_plus' || tier === 'subscription';
-
-            if (!isPaid) {
-              responseData.titles = [];
-              db.all(
-                `SELECT * FROM bonus_points WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
-                [userId],
-                (err, points) => {
-                  if (!err && points) responseData.bonus_points = points;
-                  res.json(responseData);
-                },
-              );
-              return;
-            }
-
-            // Evaluate any newly completed milestones or races (e.g. Half Ironman)
-            try {
-              await checkAndAwardRookaTitles(userId);
-              await enforceMaxUserTitles(userId, 5);
-            } catch (eTitle) {
-              console.error("Error evaluating titles on get gamification:", eTitle);
-            }
-
-            db.all(
-              `SELECT * FROM user_titles WHERE user_id = ? ORDER BY is_active DESC, created_at DESC`,
-              [userId],
-              (err, titles) => {
-                if (!err && titles && titles.length > 0) {
-                  responseData.titles = titles.map((t) => ({
-                    ...t,
-                    title: t.title || t.title_name,
-                    title_name: t.title || t.title_name,
-                    is_equipped: t.is_active === 1 ? 1 : 0,
-                    is_active: t.is_active === 1 ? 1 : 0,
-                  }));
-                } else if (!err) {
-                  const defaultTitle = {
-                    id: 'default_rooka_plus',
-                    user_id: userId,
-                    title: 'Rooka+ Athlete',
-                    title_name: 'Rooka+ Athlete',
-                    description: 'Official member of the Rooka+ endurance squad.',
-                    is_active: 1,
-                    is_equipped: 1,
-                    milestone_key: 'default_rooka_plus',
-                  };
-                  responseData.titles = [defaultTitle];
-                  db.run(
-                    `INSERT OR IGNORE INTO user_titles (user_id, title, description, is_active, milestone_key) VALUES (?, ?, ?, 1, 'default_rooka_plus')`,
-                    [userId, defaultTitle.title, defaultTitle.description]
-                  );
-                }
-
-                db.all(
-                  `SELECT * FROM bonus_points WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
-                  [userId],
-                  (err, points) => {
-                    if (!err && points) responseData.bonus_points = points;
-                    res.json(responseData);
-                  },
-                );
-              },
-            );
-          });
-        },
+    if (titles.length > 0) {
+      responseData.titles = titles.map((t) => ({
+        ...t,
+        title: t.title || t.title_name,
+        title_name: t.title || t.title_name,
+        is_equipped: t.is_active === 1 ? 1 : 0,
+        is_active: t.is_active === 1 ? 1 : 0,
+      }));
+    } else {
+      const defaultTitle = {
+        id: 'default_rooka_plus',
+        user_id: userId,
+        title: 'Rooka+ Athlete',
+        title_name: 'Rooka+ Athlete',
+        description: 'Official member of the Rooka+ endurance squad.',
+        is_active: 1,
+        is_equipped: 1,
+        milestone_key: 'default_rooka_plus',
+      };
+      responseData.titles = [defaultTitle];
+      db.run(
+        `INSERT OR IGNORE INTO user_titles (user_id, title, description, is_active, milestone_key) VALUES (?, ?, ?, 1, 'default_rooka_plus')`,
+        [userId, defaultTitle.title, defaultTitle.description]
       );
     }
-  );
+
+    const points = await new Promise((resolve) => {
+      db.all(
+        `SELECT * FROM bonus_points WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+        [userId],
+        (err, rows) => resolve(rows || [])
+      );
+    });
+    responseData.bonus_points = points;
+
+    return res.json(responseData);
+  } catch (errDb) {
+    console.error("Error finalizing gamification response:", errDb);
+    return res.json(responseData);
+  }
 });
 
 router.post(

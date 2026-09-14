@@ -42,7 +42,7 @@ export const RookaTab: React.FC<RookaTabProps> = ({
   const [isQuestModalOpen, setIsQuestModalOpen] = useState(false);
   const [questActionLoading, setQuestActionLoading] = useState(false);
 
-  const activeQuest = quests?.find((q) => q.status === 'active') || quests?.[0] || null;
+  const activeQuest = quests?.find((q) => q.status === 'active') || null;
   const currentVal = activeQuest
     ? Math.round(activeQuest.current_value !== undefined ? activeQuest.current_value : (activeQuest.progress || 0))
     : 0;
@@ -311,7 +311,7 @@ export const RookaTab: React.FC<RookaTabProps> = ({
           </View>
           {activeQuest?.reward_points ? (
             <View className="bg-semantic-warning/15 px-3 py-1.5 rounded-full">
-              <Text className="text-sm font-mono font-extrabold text-semantic-warning">
+              <Text className="text-sm font-mono font-extrabold text-semantic-warning font-rajdhani">
                 +{Math.round(activeQuest.reward_points)} rooka
               </Text>
             </View>
@@ -319,7 +319,7 @@ export const RookaTab: React.FC<RookaTabProps> = ({
         </View>
 
         <View className="bg-theme-bg p-4 rounded-2xl border border-theme-border/60 mb-5">
-          <Text className="text-sm font-bold text-theme-text leading-relaxed">
+          <Text className="text-sm font-bold text-theme-text leading-relaxed font-rajdhani">
             {activeQuest?.description || 'Complete your active challenges this week to earn bonus rooka points.'}
           </Text>
         </View>

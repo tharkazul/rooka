@@ -188,7 +188,7 @@ const MessageRow = React.memo(({
               resizeMode="cover"
             />
           </TouchableOpacity>
-          <Text className="text-theme-accent font-extrabold text-xs mr-2">rooka</Text>
+          <Text className="text-theme-accent font-extrabold text-xs mr-2 font-rajdhani">rooka</Text>
         </View>
       )}
 
@@ -230,7 +230,7 @@ const MessageRow = React.memo(({
             className="mt-3 py-2 px-3.5 bg-brand rounded-control flex-row items-center justify-center self-start shadow-xs"
           >
             <Ionicons name="sparkles" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text className="text-white text-xs font-jakarta-bold">
+            <Text className="text-white text-xs font-jakarta-bold font-rajdhani">
               Upgrade to Rooka+
             </Text>
             <Ionicons name="chevron-forward" size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />
@@ -602,7 +602,7 @@ export default function CoachScreen() {
               style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }}
               resizeMode="cover"
             />
-            <Text className="text-theme-accent font-extrabold text-xs mr-2">rooka</Text>
+            <Text className="text-theme-accent font-extrabold text-xs mr-2 font-rajdhani">rooka</Text>
           </View>
           <View className="px-4 py-2.5 flex-row items-center bg-theme-card border border-theme-border rounded-tile rounded-bl-sm shadow-xs">
             <ActivityIndicator size="small" color="#16ACBD" />
@@ -644,7 +644,7 @@ export default function CoachScreen() {
   const primaryWorkout = todayWorkouts[0] || null;
   const totalTodayRooka = todayWorkouts.reduce((acc, w) => acc + (w.target_rooka || (w as any).rookaPoints || 0), 0);
 
-  const activeQuest = quests?.find((q) => q.status === 'active') || quests?.[0] || null;
+  const activeQuest = quests?.find((q) => q.status === 'active') || null;
   const questProgressPercent = activeQuest
     ? Math.min(100, Math.round(((activeQuest.progress || 0) / (activeQuest.target_value || 1)) * 100))
     : 0;
@@ -748,7 +748,7 @@ export default function CoachScreen() {
             </View>
             {totalTodayRooka > 0 ? (
               <View className="bg-theme-accent/15 px-3 py-1.5 rounded-full">
-                <Text className="text-sm font-mono font-extrabold text-theme-accent">
+                <Text className="text-sm font-mono font-extrabold text-theme-accent font-rajdhani">
                   +{Math.round(totalTodayRooka)} Total rooka
                 </Text>
               </View>
@@ -912,14 +912,14 @@ export default function CoachScreen() {
               </View>
             </View>
             <View className="bg-semantic-warning/15 px-3 py-1.5 rounded-full">
-              <Text className="text-sm font-mono font-extrabold text-semantic-warning">
+              <Text className="text-sm font-mono font-extrabold text-semantic-warning font-rajdhani">
                 +{Math.round(activeQuest?.reward_points || 0)} rooka
               </Text>
             </View>
           </View>
 
           <View className="bg-theme-bg p-4 rounded-2xl border border-theme-border/60 mb-5">
-            <Text className="text-sm font-bold text-theme-text leading-relaxed">
+            <Text className="text-sm font-bold text-theme-text leading-relaxed font-rajdhani">
               {activeQuest?.description || 'Complete your active challenges this week to earn bonus rooka points.'}
             </Text>
           </View>
@@ -978,7 +978,7 @@ export default function CoachScreen() {
             </TouchableOpacity>
             <View className="flex-row items-center gap-x-1.5">
               <View className="w-2.5 h-2.5 rounded-full bg-theme-accent mr-1.5" />
-              <Text className="text-theme-text text-base font-extrabold">rooka</Text>
+              <Text className="text-theme-text text-base font-extrabold font-rajdhani">rooka</Text>
             </View>
           </View>
 
@@ -1100,7 +1100,7 @@ export default function CoachScreen() {
           {loading && messages.length === 0 ? (
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator size="large" color="#16ACBD" />
-              <Text className="text-theme-muted text-xs mt-2">Connecting with rooka...</Text>
+              <Text className="text-theme-muted text-xs mt-2 font-rajdhani">Connecting with rooka...</Text>
             </View>
           ) : (
             <FlatList

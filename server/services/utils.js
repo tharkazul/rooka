@@ -1209,7 +1209,8 @@ async function processActivityCoachAnalysis(internalUserId, activityData, option
                   );
 
                   if (completedQuests && completedQuests.length > 0) {
-                    const newQuest = await generateQuestForUser(internalUserId);
+                    const allQuests = await evaluateAndProgressQuests(internalUserId);
+                    const newQuest = allQuests.find((q) => q.status === "active");
                     updateUserRookaAndCheckLevel(internalUserId);
 
                     prompt += `\n\nCRITICAL INFO: The user ALSO just completed their active quest: "${completedQuests[0].description}" and earned ${completedQuests[0].reward_points} Rooka points! `;
@@ -2766,7 +2767,10 @@ function computeQuestProgressValue(quest, activities) {
       ? targetMetric
       : "distance_km";
 
-    if (quest.is_accumulative) {
+    const isAccum = Boolean(quest.is_accumulative) ||
+      /\b(total|combined|over\s+\d+|across|accumulate|sum)\b/i.test(quest.description || "");
+
+    if (isAccum) {
       val = matchingActivities.reduce((sum, a) => sum + (parseFloat(a[metricCol]) || 0), 0);
     } else {
       val = matchingActivities.reduce((max, a) => Math.max(max, parseFloat(a[metricCol]) || 0), 0);
@@ -2774,6 +2778,69 @@ function computeQuestProgressValue(quest, activities) {
   }
 
   return Math.round(val * 100) / 100;
+}
+
+function isQuestMet(currentVal, targetVal) {
+  const v = parseFloat(currentVal) || 0;
+  const t = parseFloat(targetVal) || 0;
+  if (t <= 0) return false;
+  if (v >= t) return true;
+  // Account for floating point precision, GPS inaccuracy, and UI rounding (Math.round):
+  // 1) 99% or more of target reached
+  if ((v / t) >= 0.99) return true;
+  // 2) UI rounded value matches target and remaining diff is <= 0.25 units
+  if (Math.round(v) >= Math.round(t) && (t - v) <= 0.25) return true;
+  return false;
+}
+
+async function completeQuest(userId, quest, completedAt) {
+  const compDate = completedAt || new Date().toISOString().replace("T", " ").substring(0, 19);
+  quest.status = "completed";
+  quest.completed_at = compDate;
+  quest.justCompleted = true;
+
+  // 1. Award bonus points (idempotent check by user_id and description)
+  await new Promise((resolve) => {
+    db.get(
+      `SELECT id FROM bonus_points WHERE user_id = ? AND reason = ? LIMIT 1`,
+      [userId, `Quest Completed: ${quest.description}`],
+      (err, existing) => {
+        if (!existing) {
+          db.run(
+            `INSERT INTO bonus_points (user_id, amount, reason) VALUES (?, ?, ?)`,
+            [userId, quest.reward_points || 50, `Quest Completed: ${quest.description}`],
+            () => resolve()
+          );
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+
+  // 2. Update user_quests record
+  await new Promise((resolve) => {
+    db.run(
+      `UPDATE user_quests SET status = 'completed', completed_at = ? WHERE id = ?`,
+      [compDate, quest.id],
+      () => resolve()
+    );
+  });
+
+  // 3. Immediately re-sync user's total rooka and level
+  try {
+    updateUserRookaAndCheckLevel(userId);
+  } catch (err) {
+    console.error("Error updating user rooka on quest completion:", err);
+  }
+
+  // 4. Send SSE events
+  sendSSEEvent(userId, "quest_completed", {
+    questId: quest.id,
+    reward_points: quest.reward_points,
+    description: quest.description,
+  });
+  sendSSEEvent(userId, "quest_updated", {});
 }
 
 async function evaluateAndProgressQuests(userId) {
@@ -2795,11 +2862,15 @@ async function evaluateAndProgressQuests(userId) {
   });
 
   if (quests.length === 0) {
-    const newQuest = await generateQuestForUser(userId, "common");
-    if (newQuest) {
-      newQuest.current_value = 0;
-      newQuest.progress = 0;
-      return [newQuest];
+    try {
+      const newQuest = await generateQuestForUser(userId, "common");
+      if (newQuest) {
+        newQuest.current_value = 0;
+        newQuest.progress = 0;
+        return [newQuest];
+      }
+    } catch (e) {
+      console.error("Error generating first quest in evaluateAndProgressQuests:", e);
     }
     return [];
   }
@@ -2820,14 +2891,18 @@ async function evaluateAndProgressQuests(userId) {
       if (activeCount >= 1) {
         // Enforce maximum of 1 active quest by voiding/closing older ones
         q.status = "closed";
-        db.run(`UPDATE user_quests SET status = 'closed' WHERE id = ?`, [q.id]);
+        await new Promise((resolve) => {
+          db.run(`UPDATE user_quests SET status = 'closed' WHERE id = ?`, [q.id], () => resolve());
+        });
         continue;
       }
       
       const expiresTs = q.expires_at ? parseDateToTimestamp(q.expires_at) : null;
       if (expiresTs && now >= expiresTs) {
         q.status = "expired";
-        db.run(`UPDATE user_quests SET status = 'expired' WHERE id = ?`, [q.id]);
+        await new Promise((resolve) => {
+          db.run(`UPDATE user_quests SET status = 'expired' WHERE id = ?`, [q.id], () => resolve());
+        });
         continue;
       }
 
@@ -2835,24 +2910,8 @@ async function evaluateAndProgressQuests(userId) {
       q.current_value = val;
       q.progress = val;
 
-      if (val >= q.target_value) {
-        q.status = "completed";
-        q.justCompleted = true;
-        const completedAt = new Date().toISOString().replace("T", " ").substring(0, 19);
-        q.completed_at = completedAt;
-        db.run(
-          `INSERT INTO bonus_points (user_id, amount, reason) VALUES (?, ?, ?)`,
-          [userId, q.reward_points, `Quest Completed: ${q.description}`],
-        );
-        db.run(
-          `UPDATE user_quests SET status = 'completed', completed_at = ? WHERE id = ?`,
-          [completedAt, q.id],
-        );
-        sendSSEEvent(userId, "quest_completed", {
-          questId: q.id,
-          reward_points: q.reward_points,
-          description: q.description,
-        });
+      if (isQuestMet(val, q.target_value)) {
+        await completeQuest(userId, q);
       } else {
         activeCount++;
       }
@@ -2867,11 +2926,15 @@ async function evaluateAndProgressQuests(userId) {
 
   // Automatically generate a new quest if no active quest remains
   if (activeCount === 0) {
-    const newQuest = await generateQuestForUser(userId, "common");
-    if (newQuest) {
-      newQuest.current_value = 0;
-      newQuest.progress = 0;
-      quests.unshift(newQuest);
+    try {
+      const newQuest = await generateQuestForUser(userId, "common");
+      if (newQuest) {
+        newQuest.current_value = 0;
+        newQuest.progress = 0;
+        quests.unshift(newQuest);
+      }
+    } catch (e) {
+      console.error("Error generating replacement quest in evaluateAndProgressQuests:", e);
     }
   }
 
@@ -3197,6 +3260,8 @@ module.exports = {
   evaluateQuestsAgainstActivity,
   evaluateAndProgressQuests,
   calculateQuestProgress,
+  isQuestMet,
+  completeQuest,
   getEffectiveTokenLimit,
   generateAthleteWeeklyDescription,
   generateWeeklyAthleteDescriptionsJob,
