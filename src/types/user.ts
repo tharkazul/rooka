@@ -90,3 +90,14 @@ export interface RecurringTraining {
   created_at?: string;
 }
 
+export interface BenchmarkTest {
+  id: number;
+  user_id?: number;
+  sport_type: string;
+  test_name: string;
+  metrics_json?: string | Record<string, any>;
+  coach_notes?: string;
+  completed_at?: string;
+  created_at?: string;
+}
+

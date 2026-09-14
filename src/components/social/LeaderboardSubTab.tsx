@@ -202,14 +202,14 @@ export const LeaderboardSubTab: React.FC<LeaderboardSubTabProps> = ({
       <View className="bg-theme-card border border-theme-border rounded-card p-6 items-center justify-center mt-4 shadow-sm">
         <Ionicons name="lock-closed-outline" size={48} color={theme.tint} />
         <Text className="text-lg font-extrabold text-theme-text mt-4 text-center">Leaderboard Locked</Text>
-        <Text className="text-sm text-theme-muted mt-2 text-center leading-relaxed">
+        <Text className="text-sm text-theme-muted mt-2 text-center leading-relaxed font-rajdhani">
           Upgrade to the rooka+ subscription to unlock global leaderboards and rank against your friends.
         </Text>
         <TouchableOpacity
           onPress={() => router.navigate({ pathname: '/profile', params: { subtab: 'account' } })}
           className="mt-6 bg-theme-accent px-6 py-3 rounded-full shadow-md"
         >
-          <Text className="text-white font-extrabold text-center">Upgrade to rooka+</Text>
+          <Text className="text-white font-extrabold text-center font-rajdhani">Upgrade to rooka+</Text>
         </TouchableOpacity>
       </View>
     );
@@ -282,7 +282,7 @@ export const LeaderboardSubTab: React.FC<LeaderboardSubTabProps> = ({
                       </View>
                     )}
                   </View>
-                  <Text className="text-xs text-theme-muted font-medium">
+                  <Text className="text-xs text-theme-muted font-medium font-rajdhani">
                     Lvl {item.rooka_level || 1} · {questsCount}{' '}
                     {questsCount === 1 ? 'Quest' : 'Quests'} Completed
                   </Text>
@@ -290,10 +290,10 @@ export const LeaderboardSubTab: React.FC<LeaderboardSubTabProps> = ({
               </View>
 
               <View className="items-end">
-                <Text className="text-base font-extrabold text-theme-accent font-mono">
+                <Text className="text-base font-extrabold text-theme-accent font-mono font-rajdhani">
                   {currentType === 'rooka' ? Math.round(item.total_rooka_score || 0) : questsCount}
                 </Text>
-                <Text className="text-xs text-theme-muted font-bold">
+                <Text className="text-xs text-theme-muted font-bold font-rajdhani">
                   {currentType === 'rooka' ? 'Points' : 'Quests'}
                 </Text>
               </View>

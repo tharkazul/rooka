@@ -269,7 +269,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
           </View>
         </View>
 
-        <Text className="text-theme-muted text-xs mb-4 leading-relaxed">
+        <Text className="text-theme-muted text-xs mb-4 leading-relaxed font-rajdhani">
           Sends your planned rooka sessions — warmup, intervals, targets and cooldown — straight
           into the Workout app on your Apple Watch. Needs iPhone on iOS 17 or newer with a paired
           Watch. Completed sessions still come back to rooka through Strava.
@@ -437,11 +437,11 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
       {/* STRAVA AUTOMATIONS PER SPORT TYPE */}
       <Card className="p-4 mb-6">
         <View className="flex-row items-center gap-2 pb-3 mb-3 border-b border-theme-border">
-          <View className="w-2.5 h-2.5 rounded-full bg-[#FC4C02]" />
+          <View className="w-2.5 h-2.5 rounded-full bg-theme-accent" />
           <Text className="text-theme-text font-bold text-sm">Strava Automations</Text>
         </View>
 
-        <Text className="text-theme-muted text-xs mb-3 leading-relaxed">
+        <Text className="text-theme-muted text-xs mb-3 leading-relaxed font-rajdhani">
           Customize what details rooka AI Coach posts to your Strava captions for each individual sport type.
         </Text>
 
@@ -496,11 +496,11 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
                       <Text className="text-theme-text font-bold text-xs">{row.title}</Text>
                       {isLocked && (
                         <View className="px-1.5 py-0.5 rounded bg-theme-accent/10">
-                          <Text className="text-theme-accent text-[10px] font-bold">rooka+</Text>
+                          <Text className="text-theme-accent text-[10px] font-bold font-rajdhani">rooka+</Text>
                         </View>
                       )}
                     </View>
-                    <Text className="text-theme-muted text-xs">
+                    <Text className="text-theme-muted text-xs font-rajdhani">
                       {isLocked ? 'Upgrade to rooka+ to remove the credit' : row.subtitle}
                     </Text>
                   </View>

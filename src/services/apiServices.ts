@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { UserProfile } from '../types/user';
+import { UserProfile, RecurringTraining, BenchmarkTest } from '../types/user';
 import { Activity } from '../types/activity';
 import { PlannedWorkout } from '../types/plan';
 import { PhysiqueEntry, NutritionProtocol } from '../types/physique';
@@ -47,6 +47,14 @@ export const authApi = {
         body: JSON.stringify(data),
       }
     ),
+  googleLogin: (data: { idToken: string; user?: any }) =>
+    apiClient<{ success?: boolean; token: string; isNewUser?: boolean; message: string; user?: UserProfile }>(
+      '/api/auth/google',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
 };
 
 export const userApi = {
@@ -74,6 +82,7 @@ export const userApi = {
         target_value: data.target_value ?? data.targetValue,
         onboardingCompleted: data.onboarding_completed,
         gender: data.gender,
+        trainingAvailability: (data as any).training_availability ?? (data as any).trainingAvailability,
       }),
       skipAuthInterceptor: true,
     }),
@@ -478,6 +487,40 @@ export const notificationsApi = {
       body: JSON.stringify({ title, body }),
     }),
 };
+
+export const recurringTrainingsApi = {
+  getRecurringTrainings: () =>
+    apiClient<RecurringTraining[]>('/api/user/recurring-trainings'),
+  saveRecurringTraining: (data: Partial<RecurringTraining>) =>
+    apiClient<{ success: boolean; id: number; message: string }>('/api/user/recurring-trainings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteRecurringTraining: (id: number | string) =>
+    apiClient<{ success: boolean; message: string }>(`/api/user/recurring-trainings/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const benchmarksApi = {
+  getBenchmarks: () =>
+    apiClient<BenchmarkTest[]>('/api/benchmarks'),
+  createBenchmark: (data: Partial<BenchmarkTest>) =>
+    apiClient<{ success: boolean; id: number }>('/api/benchmarks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateBenchmark: (id: number | string, data: Partial<BenchmarkTest>) =>
+    apiClient<{ success: boolean; message?: string }>(`/api/benchmarks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteBenchmark: (id: number | string) =>
+    apiClient<{ success: boolean; message?: string }>(`/api/benchmarks/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 
 
 

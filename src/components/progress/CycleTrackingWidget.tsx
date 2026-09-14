@@ -203,7 +203,7 @@ export const CycleTrackingWidget: React.FC<CycleTrackingWidgetProps> = ({
       {/* AI Coach Integration Banner */}
       <View className="flex-row items-center bg-semantic-success/10 p-2.5 rounded-xl">
         <Ionicons name="analytics-outline" size={16} color="#10B981" style={{ marginRight: 6 }} />
-        <Text className="text-xs font-semibold text-semantic-success flex-1 ml-1">
+        <Text className="text-xs font-semibold text-semantic-success flex-1 ml-1 font-rajdhani">
           Synced to Coach Knowledge: rooka AI automatically adjusts training volume and intensity for optimal recovery.
         </Text>
       </View>

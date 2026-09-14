@@ -1146,7 +1146,7 @@ export default function OnboardingWizard() {
                     </View>
                     <View className="flex-1 mt-1 justify-center min-h-[40px]">
                       <View className="flex-row items-center gap-1.5 mb-1">
-                        <Text className="text-theme-text font-extrabold text-xs">rooka</Text>
+                        <Text className="text-theme-text font-extrabold text-xs font-rajdhani">rooka</Text>
                       </View>
                       <TypingDots />
                     </View>
@@ -1166,7 +1166,7 @@ export default function OnboardingWizard() {
                     </View>
                     <View className="flex-1 mt-1">
                       <View className="flex-row items-center gap-1.5 mb-1">
-                        <Text className="text-theme-text font-extrabold text-xs">rooka</Text>
+                        <Text className="text-theme-text font-extrabold text-xs font-rajdhani">rooka</Text>
                       </View>
                       <MarkdownText content={node.text || ''} isUser={false} />
                     </View>

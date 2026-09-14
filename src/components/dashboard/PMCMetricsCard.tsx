@@ -75,9 +75,9 @@ export const PMCMetricsCard: React.FC<PMCMetricsProps> = ({
           </Text>
         </View>
         {tier === 'rooka_plus' && (
-          <View className="bg-semantic-warning/15 px-2 py-0.5 rounded-full flex-row items-center gap-x-1">
-            <RookaMark size={12} color="#F5A623" />
-            <Text className="text-xs text-semantic-warning font-bold">rooka+ AI</Text>
+          <View className="bg-theme-accent/15 px-2 py-0.5 rounded-full flex-row items-center gap-x-1">
+            <RookaMark size={12} color={theme.tint} />
+            <Text className="text-xs text-theme-accent font-bold font-rajdhani">rooka+ AI</Text>
           </View>
         )}
       </View>
@@ -124,9 +124,9 @@ export const PMCMetricsCard: React.FC<PMCMetricsProps> = ({
               {t('dashboard.fatigue')}
             </Text>
             {Math.abs(atlDelta) >= 0.05 && (
-              <View className={`flex-row items-center px-1.5 py-0.5 rounded-md ${atlDelta > 0 ? 'bg-semantic-warning/10' : 'bg-slate-500/10'}`}>
+              <View className={`flex-row items-center px-1.5 py-0.5 rounded-md ${atlDelta > 0 ? 'bg-theme-accent/10' : 'bg-slate-500/10'}`}>
                 <Ionicons name={atlDelta > 0 ? 'arrow-up' : 'arrow-down'} size={10} color={atlDelta > 0 ? '#f59e0b' : '#64748b'} />
-                <Text className={`text-xs font-bold ml-0.5 ${atlDelta > 0 ? 'text-semantic-warning' : 'text-theme-muted'}`}>
+                <Text className={`text-xs font-bold ml-0.5 ${atlDelta > 0 ? 'text-theme-accent' : 'text-theme-muted'}`}>
                   {atlDelta > 0 ? '+' : ''}{atlDelta.toFixed(1)}
                 </Text>
               </View>
@@ -157,7 +157,7 @@ export const PMCMetricsCard: React.FC<PMCMetricsProps> = ({
             {/* Label and chip previously overlapped: both were unconstrained in
                 one row, and the chip repeated "TSB" already in the label. */}
             {hasTrainingData && (
-              <Text className={`text-xs font-bold shrink-0 ${tsb >= 0 ? 'text-semantic-success' : 'text-semantic-warning'}`}>
+              <Text className={`text-xs font-bold shrink-0 ${tsb >= 0 ? 'text-semantic-success' : 'text-theme-accent'}`}>
                 TSB {tsb > 0 ? `+${tsb.toFixed(1)}` : tsb.toFixed(1)}
               </Text>
             )}

@@ -304,7 +304,7 @@ export function MicroPlanAgendaCard({
                               </View>
 
                               <View className="flex-row items-center gap-2">
-                                <Text className="text-xs font-mono font-bold text-theme-accent">
+                                <Text className="text-xs font-mono font-bold text-theme-accent font-rajdhani">
                                   +{Math.round(workout.rookaPoints || 0)} rooka
                                 </Text>
 
@@ -324,7 +324,7 @@ export function MicroPlanAgendaCard({
 
                             {/* Subline: Human Duration & Chevron */}
                             <View className="flex-row items-center justify-between pt-1">
-                              <Text className="text-xs text-theme-muted font-medium">
+                              <Text className="text-xs text-theme-muted font-medium font-rajdhani">
                                 {workout.duration || '45 min'} session · +{Math.round(workout.rookaPoints || 0)} rooka
                               </Text>
 

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const db = require("../services/db");
@@ -231,7 +232,162 @@ router.post("/apple", async (req, res) => {
   }
 });
 
-const crypto = require("crypto");
+// Sign In with Google
+router.post("/google", async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ error: "Google ID token is required." });
+  }
+
+  try {
+    // Verify token with Google TokenInfo API
+    const googleRes = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+    const payload = await googleRes.json();
+
+    if (payload.error || !payload.sub) {
+      console.warn("Invalid Google ID token:", payload.error_description || payload.error);
+      return res.status(400).json({ error: "Invalid or expired Google identity token." });
+    }
+
+    // Verify token audience if configured
+    const allowedClientIds = (process.env.GOOGLE_CLIENT_IDS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (allowedClientIds.length > 0 && !allowedClientIds.includes(payload.aud)) {
+      console.warn(`Google token audience mismatch. Received: ${payload.aud}`);
+      return res.status(400).json({ error: "Untrusted Google token audience." });
+    }
+
+    const sub = payload.sub;
+    const cleanEmail = (payload.email || "").trim().toLowerCase() || null;
+    const googleName = (payload.name || payload.given_name || "").trim();
+    const pictureUrl = payload.picture || null;
+
+    // Check if user already exists by google_id or email
+    db.get(
+      `SELECT * FROM users 
+       WHERE (google_id = ? OR (email IS NOT NULL AND LOWER(email) = ?)) 
+         AND deleted_at IS NULL 
+       LIMIT 1`,
+      [sub, cleanEmail],
+      async (err, existingUser) => {
+        if (err) {
+          console.error("Google auth lookup error:", err);
+          return res.status(500).json({ error: "Database error during Google authentication." });
+        }
+
+        if (existingUser) {
+          // Link google_id or profile picture if not previously populated
+          if (!existingUser.google_id) {
+            db.run(`UPDATE users SET google_id = ? WHERE id = ?`, [sub, existingUser.id]);
+          }
+          if (!existingUser.email && cleanEmail) {
+            db.run(`UPDATE users SET email = ? WHERE id = ?`, [cleanEmail, existingUser.id]);
+          }
+          if (!existingUser.profile_picture_url && pictureUrl) {
+            db.run(`UPDATE users SET profile_picture_url = ? WHERE id = ?`, [pictureUrl, existingUser.id]);
+          }
+
+          db.run(`UPDATE users SET login_count = login_count + 1 WHERE id = ?`, [
+            existingUser.id,
+          ]);
+
+          const token = jwt.sign(
+            { id: existingUser.id, username: existingUser.username },
+            process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+          );
+
+          console.log(`🌐 Google login successful for user: ${existingUser.username} (ID: ${existingUser.id})`);
+          return res.json({
+            token,
+            isNewUser: false,
+            message: "Welcome back to Rooka HQ",
+          });
+        }
+
+        // New User: Create account
+        let preferredName = googleName;
+        if (!preferredName && cleanEmail) {
+          preferredName = cleanEmail.split("@")[0];
+        }
+        if (!preferredName) {
+          preferredName = "Athlete";
+        }
+
+        // Sanitize username
+        preferredName = preferredName.replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "Athlete";
+
+        // Check if username is already taken, if so, append random suffix
+        db.get(
+          `SELECT id FROM users WHERE LOWER(username) = ?`,
+          [preferredName.toLowerCase()],
+          async (nameErr, nameRow) => {
+            let finalUsername = preferredName;
+            if (nameRow) {
+              const suffix = Math.floor(100 + Math.random() * 900);
+              finalUsername = `${preferredName}${suffix}`;
+            }
+
+            try {
+              // Generate secure random unguessable password hash for oauth account
+              const randomPass = crypto.randomBytes(32).toString("hex");
+              const hashedPassword = await bcrypt.hash(randomPass, 10);
+              const nowIso = new Date().toISOString();
+
+              db.run(
+                `INSERT INTO users (username, email, google_id, profile_picture_url, password_hash, athlete_context, rooka_start_date, coach_name, onboarding_completed)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                [
+                  finalUsername,
+                  cleanEmail,
+                  sub,
+                  pictureUrl,
+                  hashedPassword,
+                  "New athlete joined via Google Sign-In.",
+                  nowIso,
+                  "Rooka",
+                ],
+                function (insertErr) {
+                  if (insertErr) {
+                    console.error("Google registration error:", insertErr);
+                    return res.status(500).json({ error: "Failed to create account with Google." });
+                  }
+
+                  const newUserId = this.lastID;
+                  const token = jwt.sign(
+                    { id: newUserId, username: finalUsername },
+                    process.env.JWT_SECRET,
+                    { expiresIn: "30d" }
+                  );
+
+                  console.log(`🌐 New athlete registered via Google: ${finalUsername} (ID: ${newUserId}, Email: ${cleanEmail})`);
+                  res.status(201).json({
+                    token,
+                    isNewUser: true,
+                    message: "Account created with Google successfully!",
+                  });
+                }
+              );
+            } catch (createErr) {
+              console.error("Error creating Google user:", createErr);
+              res.status(500).json({ error: "Failed to finalize Google registration." });
+            }
+          }
+        );
+      }
+    );
+  } catch (error) {
+    console.error("Google authentication error:", error);
+    res.status(500).json({ error: "Google authentication failed." });
+  }
+});
+
 const { sendPasswordResetEmail } = require("../services/emailService");
 
 // Waitlist / Beta Signup endpoint

@@ -56,8 +56,8 @@ function resolveFuelingItems(
         detail: item.detail,
         iconName: 'fitness-outline',
         iconColor: '#34C759',
-        bgClass: 'bg-semantic-success/15',
-        borderClass: 'border-semantic-success/30',
+        bgClass: 'bg-theme-accent/15',
+        borderClass: 'border-theme-accent/30',
       };
     });
   }
@@ -98,8 +98,8 @@ function resolveFuelingItems(
           'Simple carb base (pasta or jasmine rice) with 30–35g lean protein (chicken/fish). Keep fiber and fats minimal for optimal overnight digestion.',
         iconName: 'moon-outline',
         iconColor: '#34C759',
-        bgClass: 'bg-semantic-success/15',
-        borderClass: 'border-semantic-success/30',
+        bgClass: 'bg-theme-accent/15',
+        borderClass: 'border-theme-accent/30',
       },
     ];
   }
@@ -132,8 +132,8 @@ function resolveFuelingItems(
           '30–35g fast whey protein + 75–90g carbs to jumpstart muscle repair and glycogen replenishment.',
         iconName: 'fitness-outline',
         iconColor: '#34C759',
-        bgClass: 'bg-semantic-success/15',
-        borderClass: 'border-semantic-success/30',
+        bgClass: 'bg-theme-accent/15',
+        borderClass: 'border-theme-accent/30',
       },
     ];
   }
@@ -166,8 +166,8 @@ function resolveFuelingItems(
         detail: '30g protein + 50–65g carbs (recovery shake or balanced warm meal).',
         iconName: 'fitness-outline',
         iconColor: '#34C759',
-        bgClass: 'bg-semantic-success/15',
-        borderClass: 'border-semantic-success/30',
+        bgClass: 'bg-theme-accent/15',
+        borderClass: 'border-theme-accent/30',
       },
     ];
   }
@@ -206,8 +206,8 @@ function resolveFuelingItems(
           '35–40g high-leucine protein (whey/plant) + moderate carbs to maximize muscle protein synthesis.',
         iconName: 'fitness-outline',
         iconColor: '#34C759',
-        bgClass: 'bg-semantic-success/15',
-        borderClass: 'border-semantic-success/30',
+        bgClass: 'bg-theme-accent/15',
+        borderClass: 'border-theme-accent/30',
       },
     ];
   }
@@ -235,8 +235,8 @@ function resolveFuelingItems(
       detail: '30–35g whey protein isolate + 60–75g carbs to protect lean muscle and restore glycogen.',
       iconName: 'fitness-outline',
       iconColor: '#34C759',
-      bgClass: 'bg-semantic-success/15',
-      borderClass: 'border-semantic-success/30',
+      bgClass: 'bg-theme-accent/15',
+      borderClass: 'border-theme-accent/30',
     },
   ];
 }
@@ -254,7 +254,7 @@ export const NutritionTab: React.FC = () => {
       <View className="bg-theme-card border border-theme-border rounded-card p-6 items-center justify-center mt-4 shadow-sm">
         <Ionicons name="lock-closed-outline" size={48} color={theme.tint} />
         <Text className="text-lg font-extrabold text-theme-text mt-4 text-center">Nutrition Locked</Text>
-        <Text className="text-sm text-theme-muted mt-2 text-center leading-relaxed">
+        <Text className="text-sm text-theme-muted mt-2 text-center leading-relaxed font-rajdhani">
           Upgrade to the rooka+ subscription to unlock daily AI nutrition protocols.
         </Text>
         <TouchableOpacity
@@ -262,7 +262,7 @@ export const NutritionTab: React.FC = () => {
           className="bg-theme-accent px-6 py-3 rounded-2xl w-full mt-6 shadow-sm shadow-theme-accent/30"
           activeOpacity={0.8}
         >
-          <Text className="text-white font-black text-center">Upgrade to rooka+</Text>
+          <Text className="text-white font-black text-center font-rajdhani">Upgrade to rooka+</Text>
         </TouchableOpacity>
       </View>
     );

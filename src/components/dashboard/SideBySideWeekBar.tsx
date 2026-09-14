@@ -138,7 +138,7 @@ function WeekStrip({ agenda, selectedDayIndex, onSelectDay }: WeekStripProps) {
                   <Ionicons name="checkmark-circle" size={12} color="#10B981" />
                 ) : totalRooka > 0 ? (
                   <View className="flex-row items-center justify-center gap-0.5">
-                    <Text className="text-[10px] font-mono font-extrabold text-theme-accent">
+                    <Text className="text-[10px] font-mono font-extrabold text-theme-accent font-rajdhani">
                       {totalRooka}
                     </Text>
                     <RookaMark size={12} color={theme.tint} />

@@ -30,7 +30,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           <Ionicons name="calendar-outline" size={18} color={theme.tint} />
         </View>
         <View className="flex-1">
-          <Text className="text-theme-text font-bold text-sm">rooka Workout Proposal</Text>
+          <Text className="text-theme-text font-bold text-sm font-rajdhani">rooka Workout Proposal</Text>
           <Text className="text-theme-muted text-xs">{plan.length} workout change{plan.length > 1 ? 's' : ''} suggested</Text>
         </View>
       </View>
@@ -43,8 +43,8 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               <Text className="text-theme-text text-xs font-medium" numberOfLines={1}>{item.description}</Text>
             </View>
             {item.target_rooka ? (
-              <View className="bg-semantic-warning/20 px-2 py-1 rounded-md">
-                <Text className="text-semantic-warning font-bold font-rajdhani text-xs">+{Math.round(item.target_rooka)} rooka</Text>
+              <View className="bg-theme-accent/20 px-2 py-1 rounded-md">
+                <Text className="text-theme-accent font-bold font-rajdhani text-xs">+{Math.round(item.target_rooka)} rooka</Text>
               </View>
             ) : null}
           </View>

@@ -5,8 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terms of Service & EULA - Rooka | AI Endurance & Fitness Coach</title>
   <meta name="description" content="Terms of Service and End User License Agreement for Rooka (rooka.io).">
-  <link rel="icon" type="image/png" href="rooka-icon.png">
+  <link rel="icon" type="image/svg+xml" href="rooka-mark.svg">
+  <link rel="alternate icon" type="image/png" href="logo-mark.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('rooka-theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', savedTheme);
+        } else {
+          const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -17,19 +31,45 @@
   <!-- Navigation Bar -->
   <nav class="navbar">
     <div class="container">
-      <a href="index.html" class="brand-logo">
-        <img src="rooka-icon.png" class="logo-symbol" style="object-fit: cover; background: none; box-shadow: none; border-radius: 8px;" alt="Rooka Logo">
-        <div class="logo-text">ROOKA<span class="logo-domain">.io</span></div>
+      <a href="index.html" class="brand-logo" aria-label="Rooka Homepage">
+        <div class="logo-symbol-wrap">
+          <svg class="logo-svg" viewBox="0 0 65.93 100.0" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M12.65 38.11 L41.31 25.04 L51.08 21.15 L48.5 39.06 L39.84 49.55 L59.48 64.46 L11.02 93.54 L10.6 93.65 L10.81 93.07 L21.94 79.0 L24.83 77.06 L42.94 65.72 L43.04 65.35 L42.2 64.62 L32.97 58.11 L0.31 100.0 L3.52 87.35 L25.41 52.91 L33.96 38.69 L12.65 38.16 Z M0.26 30.5 L65.93 0.0 L60.52 41.78 L48.56 48.82 L48.45 48.5 L53.96 41.21 L56.64 20.79 L57.69 12.97 L57.59 11.18 L7.09 34.7 L7.09 51.55 L17.32 47.03 L21.05 45.83 L0.31 66.19 L0.0 65.83 L0.26 30.55 Z"/>
+          </svg>
+        </div>
+        <div class="logo-text">rooka<span class="logo-domain">.io</span></div>
       </a>
 
       <ul class="nav-menu">
         <li><a href="index.html#features" class="nav-link">Features</a></li>
-        <li><a href="index.html#coach-demo" class="nav-link">AI Coach</a></li>
+        <li><a href="index.html#personas" class="nav-link">Coach Personas</a></li>
+        <li><a href="index.html#coach-demo" class="nav-link">AI Simulator</a></li>
         <li><a href="privacy.html" class="nav-link">Privacy</a></li>
         <li><a href="support.html" class="nav-link">Support</a></li>
       </ul>
 
       <div class="nav-actions">
+        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle Daytime / Nighttime theme" title="Switch between Daytime (Turquoise) and Nighttime (Ultramarine)">
+          <span class="theme-toggle-icon sun-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </span>
+          <span class="theme-toggle-icon moon-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </span>
+          <span class="theme-label-text">Day / Night</span>
+        </button>
         <a href="index.html#testflight" class="btn btn-primary btn-sm">TestFlight Beta</a>
       </div>
     </div>
@@ -127,5 +167,6 @@
     </div>
   </footer>
 
+  <script src="script.js"></script>
 </body>
 </html>

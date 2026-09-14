@@ -192,7 +192,7 @@ export function TrainingZonesCard() {
         </TouchableOpacity>
       </View>
 
-      <Text className="text-xs text-theme-muted mb-3">
+      <Text className="text-xs text-theme-muted mb-3 font-rajdhani">
         Every rooka score is your time multiplied by the zone you trained in, so these
         boundaries decide what a session is worth.
         {maxHr ? ` Max HR ${maxHr} bpm.` : ''}
@@ -251,7 +251,7 @@ export function TrainingZonesCard() {
           <Text className="text-theme-text font-bold text-sm mt-2 text-center">
             No zones yet
           </Text>
-          <Text className="text-theme-muted text-xs mt-1 text-center">
+          <Text className="text-theme-muted text-xs mt-1 text-center font-rajdhani">
             Add your age and FTP to your athlete details and rooka will build these for you.
           </Text>
         </View>

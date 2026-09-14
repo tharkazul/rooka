@@ -34,15 +34,15 @@ import { integrationsApi } from '../../services/apiServices';
 
 import { AccountTab } from '../../components/profile/AccountTab';
 import { ConnectionsTab } from '../../components/profile/ConnectionsTab';
-import { GoalsTab } from '../../components/profile/GoalsTab';
+import { CoachTab } from '../../components/profile/CoachTab';
 import { ProfileTab } from '../../components/profile/ProfileTab';
 import { ScreenHeaderTitleRow } from '../../components/ui/ScreenHeaderTitleRow';
 import { hasSubscriptionTier } from '../../utils/permissions';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export type ProfileSubTab = 'profile' | 'goals' | 'connections' | 'account';
-const TABS: ProfileSubTab[] = ['profile', 'goals', 'connections', 'account'];
+export type ProfileSubTab = 'profile' | 'coach' | 'connections' | 'account';
+const TABS: ProfileSubTab[] = ['profile', 'coach', 'connections', 'account'];
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -61,8 +61,10 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (params.subtab && TABS.includes(params.subtab as ProfileSubTab)) {
-        const targetTab = params.subtab as ProfileSubTab;
+      const rawSubtab = params.subtab;
+      const targetSubtab = rawSubtab === 'goals' ? 'coach' : rawSubtab;
+      if (targetSubtab && TABS.includes(targetSubtab as ProfileSubTab)) {
+        const targetTab = targetSubtab as ProfileSubTab;
         const index = TABS.indexOf(targetTab);
         if (index !== -1) {
           setActiveTab(targetTab);
@@ -390,7 +392,7 @@ export default function ProfileScreen() {
 
             const labelMap: Record<ProfileSubTab, string> = {
               profile: t('profile.tabProfile') || 'Profile',
-              goals: t('profile.tabGoals') || 'Goals',
+              coach: t('profile.tabCoach') || 'Coach',
               connections: t('profile.tabConnections') || 'Connections',
               account: t('profile.tabAccount') || 'Account',
             };
@@ -455,7 +457,7 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
 
-        {/* GOALS TAB PAGE */}
+        {/* COACH TAB PAGE */}
         <View style={{ width: SCREEN_WIDTH }} className="flex-1">
           <ScrollView
             className="flex-1 px-4 pt-4"
@@ -463,7 +465,7 @@ export default function ProfileScreen() {
             showsVerticalScrollIndicator={false}
             onScrollBeginDrag={notifyScroll}            onScrollEndDrag={notifyScrollEnd}            onMomentumScrollEnd={notifyScrollEnd}
           >
-            <GoalsTab />
+            <CoachTab />
           </ScrollView>
         </View>
 

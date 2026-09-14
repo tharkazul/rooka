@@ -834,8 +834,8 @@ export default function CoachScreen() {
         >
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-3">
-              <View className="w-12 h-12 rounded-2xl bg-semantic-success/15 items-center justify-center">
-                <Ionicons name="restaurant-outline" size={24} color="#10B981" />
+              <View className="w-12 h-12 rounded-2xl bg-theme-accent/15 items-center justify-center">
+                <Ionicons name="restaurant-outline" size={24} color={theme.tint} />
               </View>
               <View>
                 <Text className="text-lg font-extrabold text-theme-text">Today's Fueling Plan</Text>
@@ -860,8 +860,8 @@ export default function CoachScreen() {
           </View>
 
           {/* Rationale Banner */}
-          <View className="p-3.5 bg-semantic-success/10 dark:bg-semantic-success/15 rounded-2xl mb-4 border border-semantic-success/20">
-            <Text className="text-xs font-extrabold text-semantic-success mb-1">{nutrition?.focusTitle || 'Daily Nutrition Targets'}</Text>
+          <View className="p-3.5 bg-theme-accent/10 dark:bg-theme-accent/15 rounded-2xl mb-4 border border-theme-accent/20">
+            <Text className="text-xs font-extrabold text-theme-accent mb-1">{nutrition?.focusTitle || 'Daily Nutrition Targets'}</Text>
             <Text className="text-xs text-theme-text leading-relaxed font-medium">{nutrition?.rationale || 'Prioritize consistent protein distribution and targeted hydration throughout the day.'}</Text>
           </View>
 
@@ -903,7 +903,7 @@ export default function CoachScreen() {
         >
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-3">
-              <View className="w-12 h-12 rounded-2xl bg-semantic-warning/15 items-center justify-center">
+              <View className="w-12 h-12 rounded-2xl bg-theme-accent/15 items-center justify-center">
                 <Ionicons name="trophy" size={26} color={theme.tint} />
               </View>
               <View>
@@ -911,8 +911,8 @@ export default function CoachScreen() {
                 <Text className="text-xs text-theme-muted font-bold">Expires Sunday midnight</Text>
               </View>
             </View>
-            <View className="bg-semantic-warning/15 px-3 py-1.5 rounded-full">
-              <Text className="text-sm font-mono font-extrabold text-semantic-warning font-rajdhani">
+            <View className="bg-theme-accent/15 px-3 py-1.5 rounded-full">
+              <Text className="text-sm font-mono font-extrabold text-theme-accent font-rajdhani">
                 +{Math.round(activeQuest?.reward_points || 0)} rooka
               </Text>
             </View>
@@ -929,13 +929,13 @@ export default function CoachScreen() {
               <Text className="text-xs font-bold text-theme-muted">
                 Progress ({Math.round(activeQuest?.progress || 0)} / {Math.round(activeQuest?.target_value || 0)})
               </Text>
-              <Text className="text-sm font-mono font-bold text-semantic-warning">
+              <Text className="text-sm font-mono font-bold text-theme-accent">
                 {questProgressPercent}%
               </Text>
             </View>
             <View className="w-full h-3 bg-theme-bg rounded-full overflow-hidden">
               <View
-                className="h-full bg-semantic-warning rounded-full"
+                className="h-full bg-theme-accent rounded-full"
                 style={{ width: `${questProgressPercent}%` }}
               />
             </View>
@@ -1023,7 +1023,7 @@ export default function CoachScreen() {
               activeOpacity={0.75}
               className="flex-1 bg-theme-card border border-theme-border px-2 py-2 rounded-control flex-row items-center justify-center gap-1.5 shadow-xs"
             >
-              <Ionicons name="nutrition-outline" size={14} color="#10B981" />
+              <Ionicons name="nutrition-outline" size={14} color={theme.tint} />
               <Text className="text-xs font-extrabold text-theme-text" numberOfLines={1}>
                 Nutrition
               </Text>
@@ -1044,7 +1044,7 @@ export default function CoachScreen() {
               <Text className="text-xs font-extrabold text-theme-text" numberOfLines={1}>
                 Quest
               </Text>
-              <Text className="text-xs font-mono font-extrabold text-semantic-warning">
+              <Text className="text-xs font-mono font-extrabold text-theme-accent">
                 {activeQuest ? `${Math.round(activeQuest.progress || 0)}/${Math.round(activeQuest.target_value || 0)}` : '0/0'}
               </Text>
             </TouchableOpacity>
@@ -1053,10 +1053,10 @@ export default function CoachScreen() {
 
         {/* Low Token Budget Warning Banner */}
         {showTokenWarning ? (
-          <View className="bg-semantic-warning/15 px-4 py-2 border-b border-semantic-warning/30 flex-row items-center justify-between">
+          <View className="bg-theme-accent/15 px-4 py-2 border-b border-theme-accent/30 flex-row items-center justify-between">
             <View className="flex-row items-center flex-1 mr-2">
               <Ionicons name="warning-outline" size={16} color="#F59E0B" />
-              <Text className="text-semantic-warning text-xs font-semibold ml-2">
+              <Text className="text-theme-accent text-xs font-semibold ml-2">
                 Daily Budget Low: {remainingPercent}% remaining
               </Text>
             </View>
@@ -1067,7 +1067,7 @@ export default function CoachScreen() {
                   presentPaywall();
                 }}
                 activeOpacity={0.8}
-                className="bg-semantic-warning px-2.5 py-1 rounded-md"
+                className="bg-theme-accent px-2.5 py-1 rounded-md"
               >
                 <Text className="text-black font-bold text-xs">UPGRADE</Text>
               </TouchableOpacity>
@@ -1213,7 +1213,7 @@ export default function CoachScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setShowSuggestions(!showSuggestions)}
-                  className={`w-8 h-8 rounded-full border items-center justify-center active:opacity-70 ${showSuggestions ? 'bg-semantic-warning/20 border-semantic-warning' : 'bg-theme-bg/60 border-theme-border'}`}
+                  className={`w-8 h-8 rounded-full border items-center justify-center active:opacity-70 ${showSuggestions ? 'bg-theme-accent/20 border-theme-accent' : 'bg-theme-bg/60 border-theme-border'}`}
                 >
                   <Ionicons name={showSuggestions ? 'bulb' : 'bulb-outline'} size={16} color={showSuggestions ? '#F59E0B' : '#16ACBD'} />
                 </TouchableOpacity>
@@ -1231,7 +1231,7 @@ export default function CoachScreen() {
                   disabled={sending || (!inputText.trim() && selectedImages.length === 0)}
                   className={`w-9 h-9 rounded-full border items-center justify-center active:opacity-70 ${sending || (!inputText.trim() && selectedImages.length === 0)
                       ? 'bg-theme-bg/60 border-theme-border opacity-50'
-                      : 'bg-semantic-warning/15 border-semantic-warning/40'
+                      : 'bg-theme-accent/15 border-theme-accent/40'
                     }`}
                 >
                   <Ionicons

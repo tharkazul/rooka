@@ -87,7 +87,7 @@ export function DetailedDayCard({
               )}
             </View>
 
-            <Text className="text-sm text-theme-muted">
+            <Text className="text-sm text-theme-muted font-rajdhani">
               {weatherTemp}
               {dayTotalRooka > 0 ? ` · ${dayTotalRooka} total rooka` : ''}
             </Text>
@@ -166,7 +166,7 @@ export function DetailedDayCard({
                   </View>
 
                   <View className="flex-row items-center gap-2 ml-2">
-                    <Text className="text-sm font-mono font-bold text-theme-accent">
+                    <Text className="text-sm font-mono font-bold text-theme-accent font-rajdhani">
                       +{Math.round(workout.rookaPoints || 0)} rooka
                     </Text>
 

@@ -291,7 +291,7 @@ export const GoalsTab: React.FC = () => {
       <Card className="p-4 mb-6">
         <View className="flex-row justify-between items-center pb-3 mb-4 border-b border-theme-border/50">
           <View className="flex-row items-center gap-2">
-            <View className="w-2.5 h-2.5 rounded-full bg-semantic-warning" />
+            <View className="w-2.5 h-2.5 rounded-full bg-theme-accent" />
             <Text className="text-theme-text font-bold text-sm">Goals & Race Calendar</Text>
           </View>
           <TouchableOpacity
@@ -380,7 +380,7 @@ export const GoalsTab: React.FC = () => {
                   <View className="flex-row items-center justify-between">
                     <TouchableOpacity
                       onPress={() => handleToggleARace(row.id)}
-                      className={`px-2.5 py-1 rounded-full flex-row items-center ${row.isARace ? 'bg-semantic-warning/20' : 'bg-theme-card'
+                      className={`px-2.5 py-1 rounded-full flex-row items-center ${row.isARace ? 'bg-theme-accent/20' : 'bg-theme-card'
                         }`}
                     >
                       <Ionicons
@@ -389,7 +389,7 @@ export const GoalsTab: React.FC = () => {
                         color={row.isARace ? '#EAB308' : '#8E8E93'}
                       />
                       <Text
-                        className={`text-xs font-bold ml-1 ${row.isARace ? 'text-semantic-warning' : 'text-theme-muted'
+                        className={`text-xs font-bold ml-1 ${row.isARace ? 'text-theme-accent' : 'text-theme-muted'
                           }`}
                       >
                         {row.isARace ? 'PRIMARY (MAIN GOAL)' : 'SECONDARY GOAL'}

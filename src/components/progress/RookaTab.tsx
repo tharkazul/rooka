@@ -220,12 +220,12 @@ export const RookaTab: React.FC<RookaTabProps> = ({
                 <Text className="text-sm font-bold text-theme-text flex-1 mr-2" numberOfLines={2}>
                   {activeQuest.description || 'Active Weekly Quest'}
                 </Text>
-                <View className="bg-semantic-warning/15 px-2 py-0.5 rounded-md">
+                <View className="bg-theme-accent/15 px-2 py-0.5 rounded-md">
                   <View className="flex-row items-center gap-x-1">
-                    <Text className="text-[11px] font-mono font-bold text-semantic-warning">
+                    <Text className="text-[11px] font-mono font-bold text-theme-accent">
                       +{Math.round(activeQuest.reward_points || 0)}
                     </Text>
-                    <RookaMark size={11} color="#F5A623" />
+                    <RookaMark size={11} color={theme.tint} />
                   </View>
                 </View>
               </View>
@@ -296,7 +296,7 @@ export const RookaTab: React.FC<RookaTabProps> = ({
       >
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center gap-3">
-            <View className="w-12 h-12 rounded-2xl bg-semantic-warning/15 items-center justify-center">
+            <View className="w-12 h-12 rounded-2xl bg-theme-accent/15 items-center justify-center">
               <Ionicons name="trophy" size={26} color={theme.tint} />
             </View>
             <View>
@@ -305,8 +305,8 @@ export const RookaTab: React.FC<RookaTabProps> = ({
             </View>
           </View>
           {activeQuest?.reward_points ? (
-            <View className="bg-semantic-warning/15 px-3 py-1.5 rounded-full">
-              <Text className="text-sm font-mono font-extrabold text-semantic-warning font-rajdhani">
+            <View className="bg-theme-accent/15 px-3 py-1.5 rounded-full">
+              <Text className="text-sm font-mono font-extrabold text-theme-accent font-rajdhani">
                 +{Math.round(activeQuest.reward_points)} rooka
               </Text>
             </View>
@@ -324,13 +324,13 @@ export const RookaTab: React.FC<RookaTabProps> = ({
             <Text className="text-xs font-bold text-theme-muted">
               Progress ({currentVal} / {targetVal} {activeQuest?.unit || ''})
             </Text>
-            <Text className="text-sm font-mono font-bold text-semantic-warning">
+            <Text className="text-sm font-mono font-bold text-theme-accent">
               {progressPercent}%
             </Text>
           </View>
           <View className="w-full h-3 bg-theme-bg rounded-full overflow-hidden">
             <View
-              className="h-full bg-semantic-warning rounded-full"
+              className="h-full bg-theme-accent rounded-full"
               style={{ width: `${progressPercent}%` }}
             />
           </View>

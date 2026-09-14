@@ -341,7 +341,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                     <RookaMark size={18} />
                   </View>
                   <View className="flex-row items-baseline gap-x-1.5">
-                    <Text className="text-xs font-bold text-theme-muted uppercase">
+                    <Text className="text-xs font-bold text-theme-muted uppercase font-rajdhani">
                       ROOKA LEVEL
                     </Text>
                     <Text className="text-theme-accent text-xl font-extrabold font-rajdhani leading-tight">

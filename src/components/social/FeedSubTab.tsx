@@ -257,12 +257,12 @@ export const FeedSubTab: React.FC<FeedSubTabProps> = ({ onOpenActivityModal, onO
                       <Text className="text-sm font-extrabold text-theme-text">{group.username}</Text>
                       {group.rooka_level ? (
                         <View className="px-1.5 py-0.2 bg-theme-accent/15 rounded">
-                          <Text className="text-xs font-extrabold text-theme-accent">Lvl {group.rooka_level}</Text>
+                          <Text className="text-xs font-extrabold text-theme-accent font-rajdhani">Lvl {group.rooka_level}</Text>
                         </View>
                       ) : null}
                       {group.isMultiSport && (
-                        <View className="px-1.5 py-0.2 bg-semantic-warning/15 rounded">
-                          <Text className="text-xs font-extrabold text-semantic-warning">Brick ({group.activities.length})</Text>
+                        <View className="px-1.5 py-0.2 bg-theme-accent/15 rounded">
+                          <Text className="text-xs font-extrabold text-theme-accent">Brick ({group.activities.length})</Text>
                         </View>
                       )}
                     </View>
@@ -391,15 +391,15 @@ export const FeedSubTab: React.FC<FeedSubTabProps> = ({ onOpenActivityModal, onO
                 <TouchableOpacity
                   onPress={() => handleToggleKudos(primaryActivity)}
                   className={`flex-row items-center gap-x-1.5 px-3 py-1.5 rounded-full ${
-                    hasKudosed ? 'bg-amber-500/15' : 'bg-theme-bg'
+                    hasKudosed ? 'bg-theme-accent/15' : 'bg-theme-bg'
                   }`}
                 >
                   <Ionicons
                     name={hasKudosed ? 'flash' : 'flash-outline'}
                     size={15}
-                    color={hasKudosed ? '#F59E0B' : '#6F6F79'}
+                    color={hasKudosed ? theme.tint : '#6F6F79'}
                   />
-                  <Text className={`text-xs font-extrabold font-mono ${hasKudosed ? 'text-amber-500' : 'text-theme-muted'}`}>
+                  <Text className={`text-xs font-extrabold font-mono ${hasKudosed ? 'text-theme-accent' : 'text-theme-muted'}`}>
                     {totalKudos}
                   </Text>
                 </TouchableOpacity>

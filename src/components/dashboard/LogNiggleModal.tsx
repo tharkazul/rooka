@@ -256,7 +256,7 @@ export function LogNiggleModal({
                 </View>
                 <View>
                   <Text className="text-lg font-bold text-theme-text">Report Injury / Niggle</Text>
-                  <Text className="text-xs text-theme-muted">Records to Health Tracker & alerts rooka Coach</Text>
+                  <Text className="text-xs text-theme-muted font-rajdhani">Records to Health Tracker & alerts rooka Coach</Text>
                 </View>
               </View>
               <TouchableOpacity

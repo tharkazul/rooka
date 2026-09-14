@@ -64,10 +64,10 @@ module.exports = {
         // (Strava #FC4C02, Garmin #007CC3, Apple #FF2D55) are deliberately NOT
         // in this scale; they belong to someone else and must not be unified.
         brand: {
-          DEFAULT: '#FF5F3B',  // canonical accent, light mode
-          dark: '#FF6B45',     // accent on dark canvas (was also #FF6B35)
-          deep: '#E8481F',     // pressed / deepest stop (was also #FF2B00, #E63900)
-          light: '#FF9E66',    // tint, gradient head
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          dark: 'rgb(var(--accent) / <alpha-value>)',
+          deep: 'rgb(var(--accent-hover) / <alpha-value>)',
+          light: 'rgb(var(--accent) / 0.8)',
           ink: '#1B1B1F',
           accent: 'rgb(var(--accent) / <alpha-value>)',
         },

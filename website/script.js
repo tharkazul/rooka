@@ -1,5 +1,54 @@
 // Rooka Website Interactive Script
 document.addEventListener('DOMContentLoaded', () => {
+  // 0. Daytime (Light) vs Nighttime (Dark) Theme Controller
+  const themeToggleBtn = document.getElementById('theme-toggle');
+
+  function getActiveTheme() {
+    const docTheme = document.documentElement.getAttribute('data-theme');
+    if (docTheme === 'light' || docTheme === 'dark') return docTheme;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function setPageTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('rooka-theme', theme);
+    } catch (e) {}
+
+    if (themeToggleBtn) {
+      const isDark = theme === 'dark';
+      themeToggleBtn.setAttribute('aria-label', isDark ? 'Switch to Daytime mode (Turquoise)' : 'Switch to Nighttime mode (Ultramarine)');
+      themeToggleBtn.setAttribute('title', isDark ? 'Switch to Daytime (Turquoise #0EA5E9)' : 'Switch to Nighttime (Deep Ultramarine #4F46E5)');
+      const labelText = themeToggleBtn.querySelector('.theme-label-text');
+      if (labelText) {
+        labelText.textContent = isDark ? 'Night' : 'Day';
+      }
+    }
+  }
+
+  // Initialize UI state based on active theme
+  setPageTheme(getActiveTheme());
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const current = getActiveTheme();
+      const nextTheme = current === 'dark' ? 'light' : 'dark';
+      setPageTheme(nextTheme);
+    });
+  }
+
+  // Listen for system theme change if no manual selection stored
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      try {
+        if (!localStorage.getItem('rooka-theme')) {
+          setPageTheme(e.matches ? 'dark' : 'light');
+        }
+      } catch (err) {}
+    });
+  }
+
   // 1. FAQ Accordion Toggle
   const faqItems = document.querySelectorAll('.faq-item');
   faqItems.forEach(item => {
@@ -16,31 +65,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 2. Interactive AI Coach Simulator Tabs (with Hyrox / Hybrid Race Prep)
+  // 2. Interactive AI Coach Simulator Tabs (Multimodal Vision, HRV, Watch Push, Hyrox, Taper)
   const simTabBtns = document.querySelectorAll('.sim-tab-btn');
   const userQueryEl = document.getElementById('sim-user-query');
   const coachResponseEl = document.getElementById('sim-coach-response');
+  const simAvatarImg = document.getElementById('sim-avatar-img');
+  const simCoachName = document.getElementById('sim-coach-name');
 
   const coachSimData = {
+    food: {
+      question: "[Photo: Sourdough toast, 2 eggs, avocado, and flat white] Just had breakfast before my 2-hour threshold bike ride. Are my macros on target?",
+      response: "Scanned your plate: ~520 kcal (48g Carbohydrates, 22g Protein, 26g Healthy Fats). For your 2-hour threshold ride today, your glycogen burn rate will average ~65g carbs/hour. Your breakfast provides a solid baseline, but fats slow gastric emptying—so start sipping high-glycemic carbs (e.g. 60g maltodextrin/fructose mix in your bottle) 25 minutes into the ride to keep power above 240W without GI distress.",
+      avatar: "images/avatars/empathetic-default.png",
+      coachName: "Coach Rooka (Empathetic Tone)"
+    },
     recovery: {
       question: "My legs feel heavy and my HRV dropped 15ms. Should I still do my 5x1km threshold intervals today?",
-      response: "Based on your 15ms HRV drop and yesterday's 90-min tempo run, your recovery readiness is at 62 (Caution). Pushing threshold intervals today will increase fatigue without proportional adaptation. Let's pivot: swap today to a 45-min Zone 1 flush run (Heart Rate < 135 bpm) or 30-min easy spin, and push your 5x1km threshold session to tomorrow."
+      response: "Based on your 15ms HRV drop and yesterday's 90-min tempo run, your recovery readiness is at 62 (Caution). Pushing threshold intervals today will increase fatigue without proportional adaptation. Let's pivot: swap today to a 45-min Zone 1 flush run (Heart Rate < 135 bpm) or 30-min easy spin, and push your 5x1km threshold session to tomorrow.",
+      avatar: "images/avatars/empathetic-default.png",
+      coachName: "Coach Rooka (Empathetic Tone)"
+    },
+    watch: {
+      question: "Can I push today's 4x8min Sweet Spot intervals directly to my Apple Watch or Garmin without memorizing the numbers?",
+      response: "Done! Tap 'Push to Watch' on today's workout card. For Apple Watch, it syncs directly via native WorkoutKit with exact power targets (260W–285W) and haptic countdown beeps. For Garmin, it syncs onto your Garmin Connect Calendar. Just press Start on your wrist!",
+      avatar: "images/avatars/strict-default.png",
+      coachName: "Coach Rooka (Strict Data Tone)"
     },
     hyrox: {
       question: "I'm 6 weeks out from my Hyrox event. How should I balance heavy sled pushes and wall balls with my 10km running intervals without blowing up my legs?",
-      response: "To build peak hybrid capacity without overreaching, we'll implement concurrent training separation. Perform your compromised running sessions (e.g. 1km run into 50m Sled Push simulation) on high-readiness days (Rooka Score > 80). Keep your pure heavy strength work 48 hours separated from threshold intervals, and prioritize posterior-chain recovery with targeted carbohydrate timing."
+      response: "To build peak hybrid capacity without overreaching, we'll implement concurrent training separation. Perform your compromised running sessions (e.g. 1km run into 50m Sled Push simulation) on high-readiness days (Rooka Score > 80). Keep your pure heavy strength work 48 hours separated from threshold intervals, and prioritize posterior-chain recovery with targeted carbohydrate timing.",
+      avatar: "images/avatars/strict-default.png",
+      coachName: "Coach Rooka (Strict Data Tone)"
     },
     taper: {
       question: "I have my target 70.3 Ironman in 10 days. How should my PMC fitness vs fatigue balance look?",
-      response: "For optimal race-day execution, we want your Training Stress Balance (TSB Form) between +12 and +20 while retaining 92%+ of your Chronic Training Load (CTL Fitness). Starting today, cut total workout volume by 40% but keep race-pace neuromuscular bursts (e.g. 4x30s at 70.3 race watts). This keeps your engine primed while clearing deep systemic fatigue."
-    },
-    nutrition: {
-      question: "What should my fueling strategy be for tomorrow's 140km weekend ride with 1,800m elevation?",
-      response: "Target 75g - 90g of carbohydrates per hour (mix of maltodextrin/fructose in a 1:0.8 ratio) paired with 650ml fluid + 700mg sodium per hour. Start sipping carbs from minute 20, don't wait until you're hungry. Take a gel 10 minutes before the two main climbs to ensure steady blood glucose without GI distress."
-    },
-    fatigue: {
-      question: "My quad fatigue is elevated after yesterday's heavy squat session and hill intervals. Can I still do today's tempo run?",
-      response: "Your 7-day muscle workload model flags Quadriceps at 75% acute strain with elevated tissue breakdown risk. Let's protect your joints: pivot today to a low-impact Zone 2 spin on the bike (high cadence 90+ RPM) or an upper-body core session. We'll resume tempo running once quad readiness rebounds to green."
+      response: "For optimal race-day execution, we want your Training Stress Balance (TSB Form) between +12 and +20 while retaining 92%+ of your Chronic Training Load (CTL Fitness). Starting today, cut total workout volume by 40% but keep race-pace neuromuscular bursts (e.g. 4x30s at 70.3 race watts). This keeps your engine primed while clearing deep systemic fatigue.",
+      avatar: "images/avatars/cheer-hype.png",
+      coachName: "Coach Rooka (Positive Cheerleader Tone)"
     }
   };
 
@@ -55,13 +116,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data) {
           userQueryEl.style.opacity = '0';
           coachResponseEl.style.opacity = '0';
+          if (simAvatarImg) simAvatarImg.style.opacity = '0';
+
           setTimeout(() => {
             userQueryEl.textContent = `"${data.question}"`;
             coachResponseEl.textContent = data.response;
+            if (simAvatarImg) {
+              simAvatarImg.src = data.avatar;
+              simAvatarImg.style.opacity = '1';
+            }
+            if (simCoachName) simCoachName.textContent = data.coachName;
             userQueryEl.style.opacity = '1';
             coachResponseEl.style.opacity = '1';
           }, 180);
         }
+      });
+    });
+  }
+
+  // Persona Card Interactive Selection
+  const personaCards = document.querySelectorAll('.persona-card');
+  if (personaCards.length > 0) {
+    personaCards.forEach(card => {
+      card.addEventListener('click', () => {
+        personaCards.forEach(c => c.classList.remove('active-persona'));
+        card.classList.add('active-persona');
       });
     });
   }
@@ -74,19 +153,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const tourTags = document.getElementById('tour-feature-tags');
 
   const tourData = {
-    chat: {
-      src: 'images/screenshot-chat.png',
-      alt: 'Rooka 24/7 AI Coach Chat Interface',
-      title: '24/7 Conversational AI Coach',
-      desc: 'Real-time workout debriefs, physiological insights, weather-informed pacing adjustments, and race-day tactics tuned to your customized coach persona.',
-      tags: ['Google Gemini AI', 'Segment PR Analysis', 'Adaptive Weather Shifts', 'Voice & Text Support']
-    },
     planning: {
       src: 'images/screenshot-planning.png',
       alt: 'Rooka Adaptive Planning and Periodization',
       title: 'Smart Phase-Based Periodization',
-      desc: 'Dynamic 4-phase periodization (Base, Build, Peak, Taper) that automatically adjusts workout density, structured bike/run intervals, and recovery blocks with a single tap.',
-      tags: ['One-Tap Adapt', 'Structured Workouts', 'Countdown Milestones', 'Rest Day Calibration']
+      desc: 'Dynamic 4-phase periodization (Adapt, Develop, Crunch, Sustain) that automatically adjusts workout density, structured swim/bike/run intervals, and recovery blocks with one-tap Adapt.',
+      tags: ['One-Tap Adapt', 'Apple Watch WorkoutKit Push', 'Garmin Calendar Sync', 'Rest Day Calibration']
+    },
+    chat: {
+      src: 'images/screenshot-chat.png',
+      alt: 'Rooka 24/7 AI Coach Chat Interface',
+      title: '24/7 Conversational AI Coach',
+      desc: 'Real-time workout debriefs, AI food photo scanning, physiological insights, weather-informed pacing adjustments, and race-day tactics tuned to your customized coach persona.',
+      tags: ['Google Gemini 2.0 AI', 'Meal Photo Macro Scan', 'Segment PR Analysis', 'Voice & Text Support']
     },
     progress: {
       src: 'images/screenshot-progress.png',
@@ -105,16 +184,16 @@ document.addEventListener('DOMContentLoaded', () => {
     fatigue: {
       src: 'images/screenshot-fatigue.png',
       alt: 'Rooka 7-Day Muscle Fatigue Model & Injury Prevention',
-      title: '7-Day Muscle Fatigue & Health Model',
-      desc: 'Granular biomechanical workload modeling across Quads, Calves & Achilles, Hamstrings, Glutes, Core, and Upper Body to flag asymmetrical stress before overtraining occurs.',
-      tags: ['Workload Heatmaps', 'Injury Prevention', 'Active Issues Feed', 'Biomechanical Balance']
+      title: '7-Day Muscle Fatigue & Niggle Model',
+      desc: 'Granular biomechanical workload modeling across Quads, Calves & Achilles, Hamstrings, Glutes, Core, and Upper Body to flag asymmetrical stress and prevent overuse.',
+      tags: ['Workload Heatmaps', 'Niggle Logger', 'Injury Prevention', 'Biomechanical Balance']
     },
-    profile: {
-      src: 'images/screenshot-profile.png',
-      alt: 'Rooka Coach Persona and Multi-Language Settings',
-      title: 'Personalized Coach Persona & Languages',
-      desc: 'Customize your coach style—choose Empathetic & Demanding, Strict Data Nerd, or Enthusiastic Cheerleader. Fully localized in English, Dutch, German, Spanish, and French.',
-      tags: ['3 Coach Personas', 'Multi-Language UI', 'Athlete Context Memory', 'AES-256 Encrypted']
+    social: {
+      src: 'images/screenshot-social.png',
+      alt: 'Rooka Social Feed, Quests & Community Leaderboard',
+      title: 'Quests, Titles & Social Feed',
+      desc: 'Connect with training partners, share workout achievements, send sparks, and earn bonus Rooka points on weekly quests to level up your athletic rank.',
+      tags: ['Community Leaderboard', 'Weekly Quests', 'Athlete Titles', 'Sparks & Kudos']
     }
   };
 
@@ -179,20 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const navMenu = document.querySelector('.nav-menu');
   if (mobileToggle && navMenu) {
     mobileToggle.addEventListener('click', () => {
-      const isVisible = navMenu.style.display === 'flex';
-      if (isVisible) {
-        navMenu.style.display = 'none';
-      } else {
-        navMenu.style.display = 'flex';
-        navMenu.style.flexDirection = 'column';
-        navMenu.style.position = 'absolute';
-        navMenu.style.top = '80px';
-        navMenu.style.left = '0';
-        navMenu.style.width = '100%';
-        navMenu.style.background = 'rgba(8, 12, 20, 0.98)';
-        navMenu.style.padding = '24px';
-        navMenu.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
-      }
+      navMenu.classList.toggle('open');
     });
   }
 
@@ -206,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
           e.preventDefault();
           targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           if (window.innerWidth <= 768 && navMenu) {
-            navMenu.style.display = 'none';
+            navMenu.classList.remove('open');
           }
         }
       }

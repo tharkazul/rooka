@@ -239,7 +239,11 @@ async function generateWeeklyPlanForUser(userId, targetDates = null, options = {
         ? JSON.parse(user.training_availability)
         : user.training_availability;
       availabilityText = Object.entries(availObj)
-        .map(([day, data]) => `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${data.status} (Max minutes: ${data.max_minutes})`)
+        .map(([day, data]) => {
+          const isAvail = data.available !== false && data.status !== 'blocked';
+          const maxM = data.maxMinutes ?? data.max_minutes ?? 0;
+          return `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${isAvail ? 'available' : 'rest day / blocked'} (Max minutes: ${maxM})`;
+        })
         .join("\n            ");
     } catch (_) {}
   }
@@ -281,6 +285,39 @@ async function generateWeeklyPlanForUser(userId, targetDates = null, options = {
       userManualWorkouts.map((w) => `- ${w.date}: ${w.sport} - ${w.description}`).join("\n");
   }
 
+  // 7b. Fetch recurring trainings (non-Rooka recurring sports like hockey, tennis, spinning)
+  const dayKeyMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const recurringTrainings = await new Promise((resolve) => {
+    db.all(
+      `SELECT * FROM recurring_trainings WHERE user_id = ? AND is_active = 1`,
+      [userId],
+      (err, rows) => resolve(err || !rows ? [] : rows)
+    );
+  });
+
+  // Map dates (Mon - Sun) to recurring trainings on each day
+  const dateToRecurringMap = {};
+  dates.forEach((dStr) => {
+    const dObj = new Date(dStr + "T12:00:00Z");
+    const dayKey = dayKeyMap[dObj.getUTCDay()]; // e.g. 'Mon', 'Tue'
+    const matches = recurringTrainings.filter((rt) => {
+      const rtDay = (rt.day_of_week || "").trim().slice(0, 3).toLowerCase();
+      return rtDay === dayKey.toLowerCase();
+    });
+    if (matches.length > 0) {
+      dateToRecurringMap[dStr] = matches;
+    }
+  });
+
+  let recurringTrainingsNotice = "";
+  if (Object.keys(dateToRecurringMap).length > 0) {
+    recurringTrainingsNotice = `\nATHLETE'S RECURRING PERIODICAL SESSIONS (NON-ROOKA TRAININGS - MUST BE INCLUDED ON THE CALENDAR):\n` +
+      `The athlete has regular recurring sports/sessions that take place every week. You MUST include these sessions on their exact designated days in the weekly plan so the athlete has a full schedule of their active life, and you MUST balance their remaining endurance training and recovery load around these sessions:\n` +
+      Object.entries(dateToRecurringMap).map(([dStr, rts]) => {
+        return rts.map(rt => `- ${dStr} (${rt.day_of_week}): "${rt.title}" (Sport: ${rt.sport || 'Other'}, Duration: ${rt.duration_minutes || 60}m, Intensity: ${rt.intensity || 'moderate'}${rt.start_time ? `, Time: ${rt.start_time}` : ''})`).join("\n");
+      }).join("\n");
+  }
+
   // Language mapping
   const langMap = {
     nl: 'Dutch (Nederlands)',
@@ -314,6 +351,7 @@ ${recentSetsText}
 ACTIVE INJURIES/NIGGLES:
 ${nigglesText}
 ${userWorkoutsNotice}
+${recurringTrainingsNotice}
 
 ${goalContext.promptContext}
 
@@ -329,6 +367,7 @@ CRITICAL RULES:
    - Saturday: ${dates[5]}
    - Sunday: ${dates[6]}
 3. SCHEDULE BOUNDARIES: You MUST adhere to daily time constraints. If a day is marked 'blocked' or max_minutes is 0, schedule 'Rest'.
+3b. RECURRING NON-ROOKA ACTIVITIES: If any recurring non-Rooka activities are listed in ATHLETE'S RECURRING PERIODICAL SESSIONS above (e.g. hockey, spinning, tennis, club sports), you MUST include a workout entry on that exact day representing this activity. Set 'sport' to the relevant sport or 'CrossTraining' / 'Cardio' / 'Strength' / 'Other' (or closest match), use the exact session name as the description, set an appropriate target_rooka reflecting the duration and intensity (e.g. 40-70), and in 'details' describe the session and coaching notes on how it fits into their weekly athletic development. Balance the athlete's other workouts, intensities, and recovery days around these sessions.
 4. MUSCLE LOAD: Any group listed HIGH is heavily loaded. Do not schedule consecutive sessions overloading that group.
 5. INJURIES: Respect active niggles and substitute lower impact activities where necessary.
 6. TARGETS & MEASUREMENTS: Metric units (km, kg, km/h, meters). Distance condition values must be in pure meters.
@@ -443,13 +482,36 @@ Analyze my current Form (TSB) and muscle readiness. Give me a brief, punchy coac
     };
   });
 
+  // Ensure any recurring trainings for this week are represented in the plan
+  if (typeof dateToRecurringMap === 'object') {
+    Object.entries(dateToRecurringMap).forEach(([dStr, rts]) => {
+      rts.forEach((rt) => {
+        const alreadyHas = sanitizedPlan.some(p => p.date === dStr && (
+          p.description?.toLowerCase().includes(rt.title.toLowerCase()) || 
+          p.sport?.toLowerCase() === rt.sport?.toLowerCase()
+        ));
+        if (!alreadyHas) {
+          sanitizedPlan.push({
+            date: dStr,
+            sport: rt.sport || 'Other',
+            description: rt.title,
+            target_rooka: rt.intensity === 'hard' ? 65 : rt.intensity === 'easy' ? 30 : 45,
+            details: `${rt.title} (${rt.duration_minutes} min${rt.start_time ? ` at ${rt.start_time}` : ''}) - Scheduled recurring session.`,
+            steps_json: '[]',
+            source: 'recurring',
+          });
+        }
+      });
+    });
+  }
+
   // 8. Atomic Database Write:
-  // Remove existing coach-generated workouts for these dates, leaving user-created workouts intact
+  // Remove existing coach/recurring generated workouts for these dates, leaving user-created workouts intact
   await new Promise((resolve) => {
     const placeholders = dates.map(() => '?').join(',');
     db.run(
       `DELETE FROM micro_plan 
-       WHERE user_id = ? AND date IN (${placeholders}) AND (source = 'coach' OR source IS NULL)`,
+       WHERE user_id = ? AND date IN (${placeholders}) AND (source = 'coach' OR source = 'recurring' OR source IS NULL)`,
       [userId, ...dates],
       (err) => {
         if (err) console.error(`[WeeklyPlan] Error clearing prior plan for user ${userId}:`, err);
@@ -460,7 +522,7 @@ Analyze my current Form (TSB) and muscle readiness. Give me a brief, punchy coac
 
   const insertStmt = db.prepare(`
     INSERT INTO micro_plan (user_id, date, sport, description, target_rooka, details, steps_json, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'coach')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   sanitizedPlan.forEach((day) => {
@@ -471,7 +533,8 @@ Analyze my current Form (TSB) and muscle readiness. Give me a brief, punchy coac
       day.description,
       day.target_rooka,
       day.details,
-      day.steps_json
+      day.steps_json,
+      day.source || 'coach'
     );
   });
 

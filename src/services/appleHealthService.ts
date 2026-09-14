@@ -273,7 +273,12 @@ function toIntervalStep(step: WorkoutStep, activityType: ActivityType): Interval
 }
 
 function toKitStep(step: WorkoutStep, activityType: ActivityType): KitWorkoutStep {
-  return { goal: toGoal(step), alert: toAlert(step, activityType) };
+  // Warmup steps are meant for ramping up from resting heart rate.
+  // Attaching a strict heart rate zone alert to a warmup causes Apple Watch to chime
+  // and vocalize "Below Zone" every 20 seconds while the athlete is still cold.
+  const isColdWarmup = step.type === 'warmup' && step.target_type === 'heart.rate.zone';
+  const alert = isColdWarmup ? undefined : toAlert(step, activityType);
+  return { goal: toGoal(step), alert };
 }
 
 /**

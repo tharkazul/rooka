@@ -8,10 +8,10 @@ import '@/global.css';
 import { Platform } from 'react-native';
 
 export const BrandColors = {
-  primary: '#FF5F3B',
-  deep: '#E8481F',
+  primary: '#0EA5E9',
+  deep: '#0284C7',
   ink: '#1B1B1F',
-  accentDark: '#FF6B45',
+  accentDark: '#4F46E5',
 } as const;
 
 /**
@@ -27,8 +27,8 @@ export const BrandColors = {
  * -- two different oranges on the same element. Call accentAlpha() instead.
  */
 export const BrandRgb = {
-  primary: '255, 95, 59',     // #FF5F3B
-  accentDark: '255, 107, 69', // #FF6B45
+  primary: '14, 165, 233',     // #0EA5E9
+  accentDark: '79, 70, 229',   // #4F46E5
 } as const;
 
 /** Brand accent at `alpha`. Pass dark=true on a dark canvas. */
@@ -123,7 +123,7 @@ export const Colors = {
     background: '#0F172A',
     card: '#1E293B',
     border: '#334155',
-    tint: BrandColors.primary,
+    tint: BrandColors.accentDark,
     backgroundElement: '#1E293B',
     backgroundSelected: '#334155',
   },

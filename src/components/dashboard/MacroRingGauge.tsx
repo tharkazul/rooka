@@ -11,19 +11,19 @@ interface MacroRingGaugeProps {
 
 const CONFIG = {
   Protein: {
-    trackColor: 'rgba(56, 189, 248, 0.20)',
-    progressColor: '#38BDF8',
-    textColor: '#38BDF8',
-    bgSoft: 'rgba(56, 189, 248, 0.12)',
+    trackColor: 'rgba(168, 85, 247, 0.20)', // purple-500
+    progressColor: '#A855F7',
+    textColor: '#A855F7',
+    bgSoft: 'rgba(168, 85, 247, 0.12)',
   },
   Carbs: {
-    trackColor: 'rgba(52, 211, 153, 0.20)',
-    progressColor: '#34D399',
-    textColor: '#34D399',
-    bgSoft: 'rgba(52, 211, 153, 0.12)',
+    trackColor: 'rgba(14, 165, 233, 0.20)', // sky-500 (theme blue)
+    progressColor: '#0EA5E9',
+    textColor: '#0EA5E9',
+    bgSoft: 'rgba(14, 165, 233, 0.12)',
   },
   Fat: {
-    trackColor: 'rgba(248, 113, 113, 0.20)',
+    trackColor: 'rgba(248, 113, 113, 0.20)', // red-400
     progressColor: '#F87171',
     textColor: '#F87171',
     bgSoft: 'rgba(248, 113, 113, 0.12)',

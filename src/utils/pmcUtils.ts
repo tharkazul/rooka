@@ -26,7 +26,7 @@ export interface ActivityForPMC {
 }
 
 /**
- * Calculates PMC (Performance Management Chart) Telemetry metrics & 14-day ___sparkline_temp___s
+ * Calculates PMC (Performance Management Chart) Telemetry metrics & sparklines
  * using the domain pmc calculation module (src/domain/pmc.ts).
  */
 export function calculatePMCMetrics(
@@ -45,19 +45,28 @@ export function calculatePMCMetrics(
 
   const latestPhysiqueWeight = physiqueLogs.length > 0 ? physiqueLogs[0].weight_kg ?? currentWeightKg : currentWeightKg;
 
-  // Build weight history array
+  // Build 90-day (3-month) weight history array to reflect realistic weekly weigh-ins
+  const sortedLogs = [...physiqueLogs]
+    .filter((p) => p.date && typeof p.weight_kg === 'number')
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
   const weightMap: Record<string, number> = {};
-  physiqueLogs.forEach((p) => {
-    if (p.date && typeof p.weight_kg === 'number') {
-      weightMap[p.date.split('T')[0]] = p.weight_kg;
-    }
+  sortedLogs.forEach((p) => {
+    weightMap[p.date.split('T')[0]] = p.weight_kg;
   });
 
+  const weightHistoryDays = 90; // 3-month timeframe
   const now = new Date();
   const weightHistory: number[] = [];
-  let runningWeight = latestPhysiqueWeight;
 
-  for (let i = historyDays - 1; i >= 0; i--) {
+  const startWindowDate = new Date(now);
+  startWindowDate.setDate(startWindowDate.getDate() - (weightHistoryDays - 1));
+  const startWindowStr = startWindowDate.toISOString().split('T')[0];
+
+  const initialEntry = [...sortedLogs].reverse().find((p) => p.date.split('T')[0] <= startWindowStr);
+  let runningWeight = initialEntry?.weight_kg ?? (sortedLogs[0]?.weight_kg ?? latestPhysiqueWeight);
+
+  for (let i = weightHistoryDays - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
@@ -81,4 +90,3 @@ export function calculatePMCMetrics(
     weightHistory,
   };
 }
-

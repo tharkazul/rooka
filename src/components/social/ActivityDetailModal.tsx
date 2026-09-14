@@ -955,12 +955,12 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                 <View className="flex-row items-center gap-3">
                   <View className="flex-row items-center gap-1.5">
                     <Ionicons name="sparkles" size={16} color={theme.tint} />
-                    <Text className="text-sm font-bold text-theme-text font-mono">
+                    <Text className="text-sm font-bold text-theme-text font-mono font-rajdhani">
                       +{rookaScore} rooka
                     </Text>
                   </View>
                   <View className="flex-row items-center gap-1">
-                    <Ionicons name="flash" size={15} color="#F59E0B" />
+                    <Ionicons name="flash" size={15} color={theme.tint} />
                     <Text className="text-sm font-bold text-theme-text font-mono">
                       {kudosCount}
                     </Text>
@@ -971,7 +971,7 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                   onPress={handleToggleKudos}
                   activeOpacity={0.75}
                   className={`w-10 h-10 rounded-full items-center justify-center ${
-                    hasKudosed ? 'bg-amber-500' : 'bg-slate-200 dark:bg-slate-700'
+                    hasKudosed ? 'bg-theme-accent' : 'bg-slate-200 dark:bg-slate-700'
                   }`}
                 >
                   <Ionicons
@@ -1029,7 +1029,7 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                       <View className="flex-row items-center flex-1 pr-2">
                         <View
                           className={`w-6 h-6 rounded-full items-center justify-center mr-2.5 ${
-                            item.prRank === 1 ? 'bg-amber-500/20' : 'bg-theme-accent/20'
+                            item.prRank === 1 ? 'bg-theme-accent/20' : 'bg-theme-accent/20'
                           }`}
                         >
                           <Text

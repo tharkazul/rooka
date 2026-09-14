@@ -50,7 +50,7 @@ function formatDuration(minutes?: number): string {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-function getSportVisuals(sportType?: string, name?: string, accent = Colors.light.tint) {
+function getSportVisuals(sportType?: string, name?: string, accent: string = Colors.light.tint) {
   const sport = (sportType || '').toLowerCase();
   const n = (name || '').toLowerCase();
 
@@ -416,7 +416,7 @@ export const MyLogSubTab: React.FC<MyLogSubTabProps> = ({ onOpenActivityModal })
       >
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center gap-3">
-            <View className="w-12 h-12 rounded-2xl bg-semantic-warning/15 items-center justify-center">
+            <View className="w-12 h-12 rounded-2xl bg-theme-accent/15 items-center justify-center">
               <Ionicons name="trophy" size={26} color={theme.tint} />
             </View>
             <View>
@@ -425,8 +425,8 @@ export const MyLogSubTab: React.FC<MyLogSubTabProps> = ({ onOpenActivityModal })
             </View>
           </View>
           {activeQuest?.reward_points ? (
-            <View className="bg-semantic-warning/15 px-3 py-1.5 rounded-full">
-              <Text className="text-sm font-mono font-extrabold text-semantic-warning font-rajdhani">
+            <View className="bg-theme-accent/15 px-3 py-1.5 rounded-full">
+              <Text className="text-sm font-mono font-extrabold text-theme-accent font-rajdhani">
                 +{Math.round(activeQuest.reward_points)} rooka
               </Text>
             </View>
@@ -444,13 +444,13 @@ export const MyLogSubTab: React.FC<MyLogSubTabProps> = ({ onOpenActivityModal })
             <Text className="text-xs font-bold text-theme-muted">
               Progress ({currentProgress} / {targetVal})
             </Text>
-            <Text className="text-sm font-mono font-bold text-semantic-warning">
+            <Text className="text-sm font-mono font-bold text-theme-accent">
               {questProgressPercent}%
             </Text>
           </View>
           <View className="w-full h-3 bg-theme-bg rounded-full overflow-hidden">
             <View
-              className="h-full bg-semantic-warning rounded-full"
+              className="h-full bg-theme-accent rounded-full"
               style={{ width: `${questProgressPercent}%` }}
             />
           </View>

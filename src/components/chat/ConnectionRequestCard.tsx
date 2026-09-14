@@ -98,7 +98,7 @@ export const ConnectionRequestCard: React.FC<ConnectionRequestCardProps> = ({
             />
           </View>
           <View className="ml-2.5 flex-1">
-            <Text className="text-sm font-extrabold text-theme-text" numberOfLines={1}>
+            <Text className="text-sm font-extrabold text-theme-text font-rajdhani" numberOfLines={1}>
               {payload.username || 'rooka Athlete'}
             </Text>
             <Text className="text-xs text-theme-muted font-medium">

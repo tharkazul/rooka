@@ -9,7 +9,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Card } from '../ui/Card';
 import { LanguageSelector } from '../LanguageSelector';
-import { CoachPersonaSettings } from '../CoachPersonaSettings';
+import { WeeklyAvailabilityCard } from './WeeklyAvailabilityCard';
+import { RecurringTrainingsCard } from './RecurringTrainingsCard';
 import { useLanguage } from '../../context/LanguageContext';
 import { useUser } from '../../context/UserStore';
 import { useColorScheme } from 'nativewind';
@@ -202,7 +203,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
           <View className="flex-row items-center gap-x-1.5 mb-1">
             <RookaMark size={14} color={theme.tint} />
-            <Text className="text-theme-text font-bold text-sm">
+            <Text className="text-theme-text font-bold text-sm font-rajdhani">
               Rooka+ Exclusive
             </Text>
           </View>
@@ -210,7 +211,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             Earn custom athletic titles and accolades based on your races and endurance milestones.
           </Text>
           <View className="px-3 py-1 bg-theme-accent/10 rounded-full">
-            <Text className="text-theme-accent text-xs font-bold">Included with Rooka+</Text>
+            <Text className="text-theme-accent text-xs font-bold font-rajdhani">Included with Rooka+</Text>
           </View>
         </Card>
       ) : (
@@ -290,8 +291,11 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
         <LanguageSelector />
       </Card>
 
-      {/* COACH PERSONA SETTINGS */}
-      <CoachPersonaSettings />
+      {/* WEEKLY TRAINING AVAILABILITY */}
+      <WeeklyAvailabilityCard />
+
+      {/* RECURRING TRAININGS & CLUB SPORTS */}
+      <RecurringTrainingsCard />
 
       {/* Zones drive every rooka score, so they sit with the athlete's
           own details rather than in a settings sub-menu. */}

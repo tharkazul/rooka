@@ -325,7 +325,7 @@ export const AccountTab: React.FC<AccountTabProps> = ({ onLogout, isRookaPlus })
           <View className="flex-row items-center justify-between mb-2.5">
             <View className="flex-row items-center">
               <RookaMark size={24} color="#FFFFFF" />
-              <Text className="text-white text-xl font-extrabold tracking-tight ml-2">
+              <Text className="text-white text-xl font-extrabold tracking-tight ml-2 font-rajdhani">
                 {isMember
                   ? (tier === 'admin' ? 'rooka Admin Access' : 'rooka+ Active')
                   : 'Upgrade to rooka+'}
