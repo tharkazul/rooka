@@ -906,6 +906,12 @@ function canHideRookaLink(subscriptionTier) {
   );
 }
 
+function canAccessQuests(subscriptionTier) {
+  return ["subscription", "rooka_plus", "premium", "admin"].includes(
+    String(subscriptionTier || "free"),
+  );
+}
+
 /**
  * A stored entry only records what the athlete turned *off*. Anything absent -
  * a flag with no toggle in the app, or one added after they last saved - stays
@@ -1174,7 +1180,7 @@ async function processActivityCoachAnalysis(internalUserId, activityData, option
           async (planErr, plan) => {
             // Fetch user context & coach tone
             db.get(
-              "SELECT coach_name, coach_tone, coach_context FROM users WHERE id = ?",
+              "SELECT coach_name, coach_tone, coach_context, subscription_tier FROM users WHERE id = ?",
               [internalUserId],
               async (userErr, userRow) => {
                 const coachName = userRow?.coach_name || "Rooka";
@@ -1197,31 +1203,33 @@ async function processActivityCoachAnalysis(internalUserId, activityData, option
                   prompt += `This was an unplanned activity. Give a short, 1-2 sentence coach reaction based on your persona tone (${tone}).`;
                 }
 
-                // Quest evaluation
-                try {
-                  const completedQuests = await evaluateQuestsAgainstActivity(
-                    internalUserId,
-                    {
-                      distance_km: distanceKm,
-                      moving_time_min: movingTimeMin,
-                      rooka_score: rookaScore,
-                    },
-                  );
+                // Quest evaluation (paid tiers only)
+                if (canAccessQuests(userRow?.subscription_tier)) {
+                  try {
+                    const completedQuests = await evaluateQuestsAgainstActivity(
+                      internalUserId,
+                      {
+                        distance_km: distanceKm,
+                        moving_time_min: movingTimeMin,
+                        rooka_score: rookaScore,
+                      },
+                    );
 
-                  if (completedQuests && completedQuests.length > 0) {
-                    const allQuests = await evaluateAndProgressQuests(internalUserId);
-                    const newQuest = allQuests.find((q) => q.status === "active");
-                    updateUserRookaAndCheckLevel(internalUserId);
+                    if (completedQuests && completedQuests.length > 0) {
+                      const allQuests = await evaluateAndProgressQuests(internalUserId);
+                      const newQuest = allQuests.find((q) => q.status === "active");
+                      updateUserRookaAndCheckLevel(internalUserId);
 
-                    prompt += `\n\nCRITICAL INFO: The user ALSO just completed their active quest: "${completedQuests[0].description}" and earned ${completedQuests[0].reward_points} Rooka points! `;
-                    if (newQuest) {
-                      prompt += `I (the system) have automatically assigned them a NEW quest: "${newQuest.description}" (Target: ${newQuest.target_value} ${newQuest.target_metric}, Reward: ${newQuest.reward_points} Rooka). You MUST enthusiastically celebrate their completed quest AND announce their brand new quest to keep them motivated!`;
-                    } else {
-                      prompt += `You MUST enthusiastically celebrate their completed quest!`;
+                      prompt += `\n\nCRITICAL INFO: The user ALSO just completed their active quest: "${completedQuests[0].description}" and earned ${completedQuests[0].reward_points} Rooka points! `;
+                      if (newQuest) {
+                        prompt += `I (the system) have automatically assigned them a NEW quest: "${newQuest.description}" (Target: ${newQuest.target_value} ${newQuest.target_metric}, Reward: ${newQuest.reward_points} Rooka). You MUST enthusiastically celebrate their completed quest AND announce their brand new quest to keep them motivated!`;
+                      } else {
+                        prompt += `You MUST enthusiastically celebrate their completed quest!`;
+                      }
                     }
+                  } catch (e) {
+                    console.error("Quest evaluation failed during activity analysis:", e);
                   }
-                } catch (e) {
-                  console.error("Quest evaluation failed during activity analysis:", e);
                 }
 
                 prompt += ` Keep it under 3 sentences. DO NOT wrap it in JSON.`;
@@ -2534,10 +2542,18 @@ function triggerLevelUpCoachPrompt(userId, newLevel) {
 
 async function generateQuestForUser(userId, poolType = "personal", previousQuest = null) {
   return new Promise((resolve, reject) => {
-    db.all(
-      `SELECT name, sport_type, distance_km, moving_time_min, rooka_score, start_date FROM activities WHERE user_id = ? ORDER BY start_date DESC LIMIT 5`,
+    db.get(
+      `SELECT subscription_tier FROM users WHERE id = ?`,
       [userId],
-      async (err, recentActivities) => {
+      (userErr, userRow) => {
+        if (!canAccessQuests(userRow && userRow.subscription_tier)) {
+          return resolve(null);
+        }
+
+        db.all(
+          `SELECT name, sport_type, distance_km, moving_time_min, rooka_score, start_date FROM activities WHERE user_id = ? ORDER BY start_date DESC LIMIT 5`,
+          [userId],
+          async (err, recentActivities) => {
         if (!recentActivities || recentActivities.length === 0) {
           const initialQuest = {
             description: "Log your first activity",
@@ -2674,6 +2690,8 @@ async function generateQuestForUser(userId, poolType = "personal", previousQuest
             }
           );
         }
+      },
+    );
       },
     );
   });
@@ -2844,6 +2862,27 @@ async function completeQuest(userId, quest, completedAt) {
 }
 
 async function evaluateAndProgressQuests(userId) {
+  // Check subscription tier first: free/downgraded users must NEVER have active quests
+  const userRow = await new Promise((resolve) => {
+    db.get(
+      `SELECT subscription_tier FROM users WHERE id = ?`,
+      [userId],
+      (err, row) => resolve(row),
+    );
+  });
+
+  if (!canAccessQuests(userRow && userRow.subscription_tier)) {
+    // Purge any active quests for this user
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active'`,
+        [userId],
+        () => resolve(),
+      );
+    });
+    return [];
+  }
+
   // Ensure existing active quests without expires_at get a default expiration date
   await new Promise((resolve) => {
     db.run(
@@ -2945,6 +2984,16 @@ async function evaluateAndProgressQuests(userId) {
  * Quests that crossed their target during *this* evaluation.
  */
 async function evaluateQuestsAgainstActivity(userId, activityData) {
+  const userRow = await new Promise((resolve) => {
+    db.get(
+      `SELECT subscription_tier FROM users WHERE id = ?`,
+      [userId],
+      (err, row) => resolve(row),
+    );
+  });
+  if (!canAccessQuests(userRow && userRow.subscription_tier)) {
+    return [];
+  }
   const allQuests = await evaluateAndProgressQuests(userId);
   return allQuests.filter((q) => q.justCompleted);
 }
@@ -3224,6 +3273,7 @@ module.exports = {
   getStravaShareSettings,
   normalizeShareSettings,
   canHideRookaLink,
+  canAccessQuests,
   STRAVA_SHARE_SPORTS,
   STRAVA_SHARE_FLAGS,
   buildStravaUpdatePayload,

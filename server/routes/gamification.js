@@ -36,7 +36,8 @@ const {
   calculateQuestProgress,
   generateQuestForUser,
   isQuestMet,
-  completeQuest
+  completeQuest,
+  canAccessQuests
 } = require('../services/utils');
 
 function getTimeRemainingStr(expiresAt) {
@@ -150,58 +151,71 @@ router.get("/api/gamification", authenticateToken, async (req, res) => {
   const responseData = { quests: [], titles: [], bonus_points: [] };
 
   try {
-    const rawQuests = await evaluateAndProgressQuests(userId);
-    await checkAndAwardRookaTitles(userId);
+    if (!canAccessQuests(req.user.subscription_tier)) {
+      // Free users cannot access quests: close any active quests and return empty array
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active'`,
+          [userId],
+          () => resolve(),
+        );
+      });
+      await checkAndAwardRookaTitles(userId);
+      responseData.quests = [];
+    } else {
+      const rawQuests = await evaluateAndProgressQuests(userId);
+      await checkAndAwardRookaTitles(userId);
 
-    const processedQuests = await Promise.all(
-      (rawQuests || []).map(async (q) => {
-        const qObj = { ...q };
-        const currentVal = qObj.current_value !== undefined ? qObj.current_value : (qObj.progress || 0);
-        const targetVal = qObj.target_value || 1;
+      const processedQuests = await Promise.all(
+        (rawQuests || []).map(async (q) => {
+          const qObj = { ...q };
+          const currentVal = qObj.current_value !== undefined ? qObj.current_value : (qObj.progress || 0);
+          const targetVal = qObj.target_value || 1;
 
-        // Extra safety check: if an active quest met its target, ensure it is completed and awarded
-        if (qObj.status === "active" && isQuestMet(currentVal, targetVal)) {
-          await completeQuest(userId, qObj);
+          // Extra safety check: if an active quest met its target, ensure it is completed and awarded
+          if (qObj.status === "active" && isQuestMet(currentVal, targetVal)) {
+            await completeQuest(userId, qObj);
+          }
+
+          qObj.current_value = currentVal;
+          qObj.progress = currentVal;
+          qObj.progress_percent = Math.min(100, Math.round((currentVal / targetVal) * 100));
+          qObj.time_remaining_str = qObj.status === "active" ? getTimeRemainingStr(qObj.expires_at) : null;
+
+          // Unit string
+          if (qObj.target_metric === "distance_km") qObj.unit = "km";
+          else if (qObj.target_metric === "moving_time_min") qObj.unit = "min";
+          else if (qObj.target_metric === "rooka_score") qObj.unit = "pts";
+          else qObj.unit = "";
+
+          return qObj;
+        })
+      );
+
+      // If an active quest was completed above and no active quest remains, generate replacement
+      const hasActive = processedQuests.some((q) => q.status === "active");
+      if (!hasActive) {
+        try {
+          const refreshed = await evaluateAndProgressQuests(userId);
+          const newActive = refreshed.find((q) => q.status === "active");
+          if (newActive) {
+            newActive.current_value = 0;
+            newActive.progress = 0;
+            newActive.progress_percent = 0;
+            newActive.time_remaining_str = getTimeRemainingStr(newActive.expires_at);
+            if (newActive.target_metric === "distance_km") newActive.unit = "km";
+            else if (newActive.target_metric === "moving_time_min") newActive.unit = "min";
+            else if (newActive.target_metric === "rooka_score") newActive.unit = "pts";
+            else newActive.unit = "";
+            processedQuests.unshift(newActive);
+          }
+        } catch (genErr) {
+          console.error("Error refreshing active quest in /api/gamification:", genErr);
         }
-
-        qObj.current_value = currentVal;
-        qObj.progress = currentVal;
-        qObj.progress_percent = Math.min(100, Math.round((currentVal / targetVal) * 100));
-        qObj.time_remaining_str = qObj.status === "active" ? getTimeRemainingStr(qObj.expires_at) : null;
-
-        // Unit string
-        if (qObj.target_metric === "distance_km") qObj.unit = "km";
-        else if (qObj.target_metric === "moving_time_min") qObj.unit = "min";
-        else if (qObj.target_metric === "rooka_score") qObj.unit = "pts";
-        else qObj.unit = "";
-
-        return qObj;
-      })
-    );
-
-    // If an active quest was completed above and no active quest remains, generate replacement
-    const hasActive = processedQuests.some((q) => q.status === "active");
-    if (!hasActive) {
-      try {
-        const refreshed = await evaluateAndProgressQuests(userId);
-        const newActive = refreshed.find((q) => q.status === "active");
-        if (newActive) {
-          newActive.current_value = 0;
-          newActive.progress = 0;
-          newActive.progress_percent = 0;
-          newActive.time_remaining_str = getTimeRemainingStr(newActive.expires_at);
-          if (newActive.target_metric === "distance_km") newActive.unit = "km";
-          else if (newActive.target_metric === "moving_time_min") newActive.unit = "min";
-          else if (newActive.target_metric === "rooka_score") newActive.unit = "pts";
-          else newActive.unit = "";
-          processedQuests.unshift(newActive);
-        }
-      } catch (genErr) {
-        console.error("Error refreshing active quest in /api/gamification:", genErr);
       }
-    }
 
-    responseData.quests = processedQuests;
+      responseData.quests = processedQuests;
+    }
   } catch (e) {
     console.error("Error evaluating gamification in /api/gamification:", e);
   }
@@ -290,6 +304,9 @@ router.post(
   authenticateToken,
   async (req, res) => {
     const userId = req.user.id;
+    if (!canAccessQuests(req.user.subscription_tier)) {
+      return res.status(403).json({ error: "Quests require a paid subscription." });
+    }
 
     db.get(
       `SELECT count(*) as count FROM user_quests WHERE user_id = ? AND status = 'active'`,
@@ -322,6 +339,9 @@ router.post(
   authenticateToken,
   async (req, res) => {
     const userId = req.user.id;
+    if (!canAccessQuests(req.user.subscription_tier)) {
+      return res.status(403).json({ error: "Quests require a paid subscription." });
+    }
     const { quest_id } = req.body;
 
     const findQuestQuery = quest_id
@@ -394,6 +414,13 @@ router.post(
 
 router.post("/api/gamification/evaluate_quests", authenticateToken, async (req, res) => {
   const userId = req.user.id;
+  if (!canAccessQuests(req.user.subscription_tier)) {
+    return res.json({
+      success: true,
+      message: "Quests require a paid subscription.",
+      quests: [],
+    });
+  }
 
   try {
     const allQuests = await evaluateAndProgressQuests(userId);

@@ -359,6 +359,14 @@ router.post('/finalize', authenticateToken, async (req, res) => {
       );
     });
 
+    // If finishing onboarding on free tier, ensure no active quests remain
+    if (subTier === 'free') {
+      db.run(
+        `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active'`,
+        [userId]
+      );
+    }
+
     // 2. Save milestone if provided
     const reqGoalType = req.body.goalType || req.body.goal_type || 'race';
     const reqTargetMode = req.body.targetMode || req.body.target_mode || 'finish';

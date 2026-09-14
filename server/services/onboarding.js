@@ -314,9 +314,15 @@ const FEATURES_REGISTRY = [
     checkUsage: (userId) => {
       return new Promise((resolve) => {
         db.get(
-          `SELECT COUNT(*) as cnt FROM user_quests WHERE user_id = ?`,
+          `SELECT u.subscription_tier, 
+                  (SELECT COUNT(*) FROM user_quests WHERE user_id = u.id AND status IN ('active', 'completed')) as cnt 
+           FROM users u WHERE u.id = ?`,
           [userId],
-          (err, row) => resolve(row ? row.cnt > 0 : false)
+          (err, row) => {
+            if (err || !row) return resolve(false);
+            const isPaid = ["subscription", "rooka_plus", "premium", "admin"].includes(row.subscription_tier || "free");
+            resolve(isPaid && row.cnt > 0);
+          }
         );
       });
     }

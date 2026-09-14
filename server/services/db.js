@@ -119,6 +119,8 @@ db.serialize(() => {
   db.run(`ALTER TABLE users ADD COLUMN coach_name TEXT DEFAULT 'Rooka'`, (err) => {});
   db.run(`ALTER TABLE users ADD COLUMN apple_id TEXT`, (err) => {});
   db.run(`CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id)`, (err) => {});
+  db.run(`ALTER TABLE users ADD COLUMN google_id TEXT`, (err) => {});
+  db.run(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`, (err) => {});
   // Databases created before the Spark -> Rooka rename still carry
   // `coach_name TEXT DEFAULT 'Spark'` on the column itself. ALTER TABLE ADD
   // COLUMN above is a no-op there, so the stale default survives and every new
@@ -532,6 +534,20 @@ db.serialize(() => {
         FOREIGN KEY(micro_plan_id) REFERENCES micro_plan(id)
     )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS recurring_trainings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        day_of_week TEXT NOT NULL,
+        start_time TEXT DEFAULT '',
+        duration_minutes INTEGER DEFAULT 60,
+        sport TEXT DEFAULT 'Other',
+        intensity TEXT DEFAULT 'moderate',
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS public_profile_cache (
         user_id INTEGER PRIMARY KEY,
         data TEXT,
@@ -589,6 +605,13 @@ db.serialize(() => {
   );
   db.run(
     `UPDATE user_quests SET expires_at = datetime(created_at, '+3 days') WHERE expires_at IS NULL AND status = 'active'`,
+    (err) => {},
+  );
+  // Ensure free and downgraded users never retain active quests
+  db.run(
+    `UPDATE user_quests SET status = 'closed' 
+     WHERE status = 'active' 
+     AND user_id IN (SELECT id FROM users WHERE subscription_tier IS NULL OR subscription_tier = 'free')`,
     (err) => {},
   );
 

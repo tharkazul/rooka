@@ -3,6 +3,7 @@ import { Quest, UserTitle } from '../types/gamification';
 import { gamificationApi } from '../services/apiServices';
 import { wsService } from '../services/websocket';
 import { useUser } from './UserStore';
+import { canAccessQuests } from '../utils/permissions';
 
 interface GamificationContextType {
   quests: Quest[];
@@ -20,7 +21,7 @@ const defaultQuests: Quest[] = [];
 const GamificationContext = createContext<GamificationContextType | undefined>(undefined);
 
 export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useUser();
+  const { isAuthenticated, user } = useUser();
   const [quests, setQuests] = useState<Quest[]>(defaultQuests);
   const [titles, setTitles] = useState<UserTitle[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -28,10 +29,13 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
 
   const refreshGamification = React.useCallback(async () => {
     if (!isAuthenticated) return;
+    if (!canAccessQuests(user?.subscription_tier)) {
+      setQuests([]);
+    }
     setLoading(true);
     try {
       const data = await gamificationApi.getGamificationData();
-      if (data && data.quests && Array.isArray(data.quests)) {
+      if (canAccessQuests(user?.subscription_tier) && data && data.quests && Array.isArray(data.quests)) {
         const normalizedQuests = data.quests.map((q: Quest) => {
           const currentVal = q.current_value !== undefined ? q.current_value : (q.progress ?? 0);
           const targetVal = q.target_value || 1;
@@ -46,6 +50,8 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
           };
         });
         setQuests(normalizedQuests);
+      } else if (!canAccessQuests(user?.subscription_tier)) {
+        setQuests([]);
       }
       if (data && data.titles) {
         setTitles(data.titles);
@@ -56,9 +62,13 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.subscription_tier]);
 
   const swapQuest = React.useCallback(async (questId?: number | string) => {
+    if (!canAccessQuests(user?.subscription_tier)) {
+      setQuests([]);
+      return;
+    }
     setLoading(true);
     try {
       const activeQ = quests.find((q) => q.status === 'active');
@@ -90,6 +100,10 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
   }, [quests, refreshGamification]);
 
   const generateQuest = React.useCallback(async () => {
+    if (!canAccessQuests(user?.subscription_tier)) {
+      setQuests([]);
+      return;
+    }
     setLoading(true);
     try {
       // Check if user already has an active quest; if so, swap/refresh it instead of failing
@@ -121,7 +135,7 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [quests, refreshGamification, swapQuest]);
+  }, [quests, refreshGamification, swapQuest, user?.subscription_tier]);
 
   const claimQuest = React.useCallback((id: number | string) => {
     setQuests((prev) =>
@@ -134,6 +148,9 @@ export const GamificationStore: React.FC<{ children: ReactNode }> = ({ children 
       setQuests(defaultQuests);
       setTitles([]);
       return;
+    }
+    if (!canAccessQuests(user?.subscription_tier)) {
+      setQuests(defaultQuests);
     }
     refreshGamification();
 

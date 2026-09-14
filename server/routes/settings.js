@@ -373,7 +373,8 @@ router.delete('/api/user/account', authenticateToken, (req, res) => {
             "nutrition_intake", "daily_diet_logs", "biometrics",
             "physique_logs", "milestones", "kudos", "public_profile_cache", 
             "completed_micro_steps", "push_subscriptions", "garmin_health_data", 
-            "user_titles", "athlete_niggles", "bonus_points", "recurring_trainings"
+            "user_titles", "athlete_niggles", "bonus_points", "recurring_trainings",
+            "benchmark_tests"
         ];
 
         db.serialize(() => {
@@ -430,7 +431,14 @@ router.post("/api/user/sync-subscription", authenticateToken, (req, res) => {
       [userId],
       (err, row) => {
         if (err || !row) return res.status(500).json({ error: "DB_ERROR" });
-        return res.json({ success: true, tier: row.subscription_tier || "free" });
+        const tier = row.subscription_tier || "free";
+        if (tier === "free") {
+          db.run(
+            `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active'`,
+            [userId]
+          );
+        }
+        return res.json({ success: true, tier });
       }
     );
   }

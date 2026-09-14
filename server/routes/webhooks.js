@@ -48,6 +48,10 @@ router.post('/revenuecat', async (req, res) => {
             console.error(`[RevenueCat Webhook] Error downgrading user ${appUserId}:`, err);
           } else {
             console.log(`[RevenueCat Webhook] User ${appUserId} downgraded to free.`);
+            db.run(
+              `UPDATE user_quests SET status = 'closed' WHERE user_id = ? AND status = 'active'`,
+              [appUserId],
+            );
           }
         }
       );

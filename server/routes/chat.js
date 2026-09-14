@@ -62,6 +62,7 @@ const {
   triggerLevelUpCoachPrompt,
   generateQuestForUser,
   evaluateQuestsAgainstActivity,
+  canAccessQuests,
   getEffectiveTokenLimit
 } = require('../services/utils');
 
@@ -600,7 +601,7 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
                         - The athlete has earned a total of ${gamification.bonusPoints} bonus rooka points.
                         - The athlete's latest earned title/badge is: "${gamification.latestTitle}".
                         - Mention their streak or title occasionally to motivate them, especially if their streak is high (e.g., "You're on a ${gamification.streak} day streak, keep the momentum going!"). Do NOT mention it every single time.
-                        - IMPORTANT: Warmup and Cooldown steps MUST ALWAYS be at least heart rate Zone 2 (never Zone 1). Rest and Recovery steps can be Zone 1.
+                        - IMPORTANT: Warmup and Cooldown steps should generally use "target_type": "no.target" or open intensity so the athlete can gradually ease in and elevate their heart rate without triggering out-of-zone alarms while cold. Rest and Recovery steps can be Zone 1.
 
                     WORKOUT PLANNING & PRESCRIPTION DETAILS (CRITICAL):
                     If you create, suggest, or modify a workout plan, you MUST append a JSON code block at the very end of your response. 
@@ -656,7 +657,7 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
                     
                     MANUAL ACTIVITY LOGGING (CRITICAL REQUIREMENT):
                     If the athlete mentions completing, running, cycling, swimming, lifting, or performing ANY workout, run, or activity in their message (e.g. "I ran 10km", "Just finished 10k", "Did a 45 min run"), YOU MUST output a "log_activity" JSON block at the very end of your response.
-                    DO NOT ONLY praise them in conversational text—YOU MUST INCLUDE THE "log_activity" JSON BLOCK! If you do not include the JSON block, the workout WILL NOT be saved to their activity log ("My Log") and their active quest WILL NOT progress or complete!
+                    DO NOT ONLY praise them in conversational text—YOU MUST INCLUDE THE "log_activity" JSON BLOCK! If you do not include the JSON block, the workout WILL NOT be saved to their activity log ("My Log")!
                     Always estimate reasonable values for distance_km, moving_time_min, and rooka_score if not explicitly specified.
                     Format it EXACTLY like this inside triple backticks:
                     \`\`\`json
@@ -1086,46 +1087,48 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
                                               );
                                             });
 
-                                            // QUEST EVALUATION AFTER INSERT
-                                            try {
-                                              const completedQuests =
-                                                await evaluateQuestsAgainstActivity(
-                                                  req.user.id,
-                                                  {
-                                                    distance_km:
-                                                      act.distance_km || 0,
-                                                    moving_time_min:
-                                                      act.moving_time_min || 0,
-                                                    rooka_score: rookaScore,
-                                                    sport_type: act.sport_type || "Workout",
-                                                  },
+                                            // QUEST EVALUATION AFTER INSERT (paid tiers only)
+                                            if (canAccessQuests(req.user.subscription_tier)) {
+                                              try {
+                                                const completedQuests =
+                                                  await evaluateQuestsAgainstActivity(
+                                                    req.user.id,
+                                                    {
+                                                      distance_km:
+                                                        act.distance_km || 0,
+                                                      moving_time_min:
+                                                        act.moving_time_min || 0,
+                                                      rooka_score: rookaScore,
+                                                      sport_type: act.sport_type || "Workout",
+                                                    },
+                                                  );
+
+                                                sendSSEEvent(req.user.id, "quest_updated", {});
+
+                                                if (completedQuests && completedQuests.length > 0) {
+                                                  // The reward lands in `bonus_points` after the
+                                                  // total was recomputed above, so recompute again
+                                                  // or the reward — and any level-up it triggers —
+                                                  // only appears on some later unrelated request.
+                                                  updateUserRookaAndCheckLevel(req.user.id);
+                                                }
+
+                                                if (
+                                                  completedQuests &&
+                                                  completedQuests.length > 0
+                                                ) {
+                                                  // Deferred until after COMMIT. This only appends celebration
+                                                  // text, but awaiting the model here held the transaction open
+                                                  // for as long as it took - up to a minute once the rate-limit
+                                                  // backoff kicks in.
+                                                  questCelebrationPrompt = `The user just manually logged an activity and ALSO completed their active quest: "${completedQuests[0].description}" earning ${completedQuests[0].reward_points} Rooka points! Give a short 1-2 sentence highly motivating response celebrating their completed quest!`;
+                                                }
+                                              } catch (e) {
+                                                console.error(
+                                                  "Quest evaluation failed during manual sync:",
+                                                  e,
                                                 );
-
-                                              sendSSEEvent(req.user.id, "quest_updated", {});
-
-                                              if (completedQuests && completedQuests.length > 0) {
-                                                // The reward lands in `bonus_points` after the
-                                                // total was recomputed above, so recompute again
-                                                // or the reward — and any level-up it triggers —
-                                                // only appears on some later unrelated request.
-                                                updateUserRookaAndCheckLevel(req.user.id);
                                               }
-
-                                              if (
-                                                completedQuests &&
-                                                completedQuests.length > 0
-                                              ) {
-                                                // Deferred until after COMMIT. This only appends celebration
-                                                // text, but awaiting the model here held the transaction open
-                                                // for as long as it took - up to a minute once the rate-limit
-                                                // backoff kicks in.
-                                                questCelebrationPrompt = `The user just manually logged an activity and ALSO completed their active quest: "${completedQuests[0].description}" earning ${completedQuests[0].reward_points} Rooka points! Give a short 1-2 sentence highly motivating response celebrating their completed quest!`;
-                                              }
-                                            } catch (e) {
-                                              console.error(
-                                                "Quest evaluation failed during manual sync:",
-                                                e,
-                                              );
                                             }
                                             planUpdated = true; // Signal frontend to reload data/charts
                                           } else if (

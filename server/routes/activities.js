@@ -38,6 +38,7 @@ const {
   evaluateQuestsAgainstActivity,
   normalizeShareSettings,
   canHideRookaLink,
+  canAccessQuests,
   STRAVA_SHARE_SPORTS,
   STRAVA_SHARE_FLAGS
 } = require('../services/utils');
@@ -89,6 +90,56 @@ router.post("/api/benchmarks", authenticateToken, (req, res) => {
         return res.status(500).json({ error: "Failed to record benchmark test" });
       }
       res.json({ success: true, id: this.lastID });
+    }
+  );
+});
+
+router.put("/api/benchmarks/:id", authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const { sport_type, test_name, metrics_json, coach_notes, completed_at } = req.body;
+
+  db.run(
+    `UPDATE benchmark_tests 
+     SET sport_type = COALESCE(?, sport_type),
+         test_name = COALESCE(?, test_name),
+         metrics_json = COALESCE(?, metrics_json),
+         coach_notes = COALESCE(?, coach_notes),
+         completed_at = COALESCE(?, completed_at)
+     WHERE id = ? AND user_id = ?`,
+    [
+      sport_type || null,
+      test_name || null,
+      metrics_json !== undefined ? (typeof metrics_json === 'object' ? JSON.stringify(metrics_json) : metrics_json) : null,
+      coach_notes !== undefined ? coach_notes : null,
+      completed_at || null,
+      id,
+      req.user.id
+    ],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ error: "Failed to update benchmark test" });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: "Benchmark test not found or unauthorized" });
+      }
+      res.json({ success: true, message: "Benchmark test updated" });
+    }
+  );
+});
+
+router.delete("/api/benchmarks/:id", authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.run(
+    `DELETE FROM benchmark_tests WHERE id = ? AND user_id = ?`,
+    [id, req.user.id],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ error: "Failed to delete benchmark test" });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: "Benchmark test not found or unauthorized" });
+      }
+      res.json({ success: true, message: "Benchmark test deleted" });
     }
   );
 });
@@ -502,22 +553,26 @@ router.post("/api/activities", authenticateToken, async (req, res) => {
       [req.user.id, todayStr],
     );
 
-    // Evaluate active quests
+    // Evaluate active quests (paid tiers only)
     let completedQuests = [];
-    try {
-      completedQuests = await evaluateQuestsAgainstActivity(req.user.id, {
-        distance_km: finalDistanceKm,
-        moving_time_min: finalMovingTimeMin,
-        rooka_score: rookaScore,
-        sport_type: finalSport,
-      });
-    } catch (questErr) {
-      console.error("Error evaluating quests after manual activity log:", questErr);
+    if (canAccessQuests(req.user.subscription_tier)) {
+      try {
+        completedQuests = await evaluateQuestsAgainstActivity(req.user.id, {
+          distance_km: finalDistanceKm,
+          moving_time_min: finalMovingTimeMin,
+          rooka_score: rookaScore,
+          sport_type: finalSport,
+        });
+      } catch (questErr) {
+        console.error("Error evaluating quests after manual activity log:", questErr);
+      }
     }
 
     sendSSEEvent(req.user.id, "activity_logged", { activityId: manualId });
     sendSSEEvent(req.user.id, "activity_synced", { activityId: manualId });
-    sendSSEEvent(req.user.id, "quest_updated", {});
+    if (canAccessQuests(req.user.subscription_tier)) {
+      sendSSEEvent(req.user.id, "quest_updated", {});
+    }
 
     const activityObj = {
       id: manualId,
@@ -808,7 +863,7 @@ router.post("/api/generate-plan", authenticateToken, async (req, res) => {
                  - For SWIMMING focus: Schedule a 400m CSS Swim Test ("sport": "Swim", "description": "🎯 Benchmark Assessment: 400m CSS Swim Test").
                  - For HYROX / FUNCTIONAL FITNESS focus: Schedule a Hyrox Benchmark Test ("sport": "Strength", "description": "🎯 Benchmark Assessment: Hyrox Functional Fitness Test").
                  - NEVER assign a running test to pure swimmers/cyclists or a cycling test to Hyrox athletes. Respect their specific sport/goal context strictly.
-            12. IMPORTANT: Warmup and Cooldown steps MUST ALWAYS be at least heart rate Zone 2 (never Zone 1). Rest and Recovery steps can be Zone 1.
+            12. IMPORTANT: Warmup and Cooldown steps should generally use "target_type": "no.target" or open intensity so the athlete can gradually ease in and elevate their heart rate without triggering out-of-zone alarms while cold. Rest and Recovery steps can be Zone 1.
             13. WORKOUT DETAILS & PRESCRIPTION GRANULARITY (CRITICAL):
                 - Every workout's 'details' field is the primary athlete-facing coaching prescription and MUST NEVER be a basic, vague one-liner like "intervals" or "easy run".
                 - You MUST prescribe concrete technique cues, drills, equipment (e.g. pull buoy & hand paddles, aero bars, SkiErg, sled push), specific movement focus (e.g. "focus on high heels / rapid heel recovery", "early vertical forearm EVF catch", "single-leg pedaling"), dynamic mobility warm-ups, and session fueling guidance.
