@@ -3,6 +3,7 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const db = require("../services/db");
 const {
   FEATURES_REGISTRY,
+  hasAccess,
   evaluateUserFeatureUsage,
   getNextUnusedFeatureForUser,
   runWeeklyFeatureOnboardingJob
@@ -26,15 +27,6 @@ function get(sql, params = []) {
   });
 }
 
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
-}
-
 async function main() {
   const args = process.argv.slice(2);
   const shouldTrigger = args.includes("--trigger") || args.includes("-t");
@@ -44,20 +36,23 @@ async function main() {
   console.log("     Rooka Feature Checklist & Onboarding Status  ");
   console.log("==================================================");
 
-  let userFilter = "WHERE deleted_at IS NULL";
+  let userFilter = "WHERE u.deleted_at IS NULL";
   let userParams = [];
   if (targetUserArg) {
     if (!isNaN(parseInt(targetUserArg, 10))) {
-      userFilter += " AND id = ?";
+      userFilter += " AND u.id = ?";
       userParams.push(parseInt(targetUserArg, 10));
     } else {
-      userFilter += " AND LOWER(username) = LOWER(?)";
+      userFilter += " AND LOWER(u.username) = LOWER(?)";
       userParams.push(targetUserArg);
     }
   }
 
   const users = await all(
-    `SELECT id, username, subscription_tier, coach_tone FROM users ${userFilter} ORDER BY id ASC`,
+    `SELECT u.id, u.username, u.subscription_tier, u.coach_tone, u.gender,
+            u.garmin_username, u.garmin_oauth1_token,
+            (SELECT COUNT(*) FROM push_tokens WHERE user_id = u.id AND device_type = 'ios') as is_ios
+     FROM users u ${userFilter} ORDER BY u.id ASC`,
     userParams
   );
 
@@ -68,12 +63,12 @@ async function main() {
 
   console.log(`\n📋 Evaluating ${users.length} user(s) across ${FEATURES_REGISTRY.length} registered features...\n`);
 
-  // First evaluate all users so user_feature_onboarding is up to date
+  // 1. Evaluate all users to sync user_feature_onboarding
   for (const u of users) {
     await evaluateUserFeatureUsage(u.id);
   }
 
-  // Load all onboarding records for these users
+  // Load all onboarding records
   const onboardingRecords = await all(
     `SELECT user_id, feature_key, status, introduced_at, first_used_at FROM user_feature_onboarding`
   );
@@ -82,11 +77,12 @@ async function main() {
     statusMap.set(`${r.user_id}:${r.feature_key}`, r);
   }
 
-  // 1. Detailed per-user summary
+  // 2. Detailed per-user summary
   for (const u of users) {
-    console.log(`--------------------------------------------------`);
-    console.log(`👤 User #${u.id} - ${u.username} (${u.subscription_tier || "free"})`);
-    console.log(`--------------------------------------------------`);
+    console.log(`----------------------------------------------------------------------`);
+    console.log(`👤 User #${u.id} - ${u.username} (Tier: ${u.subscription_tier || "free"})`);
+    console.log(`   Hardware: ${u.garmin_username || u.garmin_oauth1_token ? "Garmin Connected ✓" : "No Garmin ✗"} | ${u.is_ios > 0 ? "iOS/Apple Watch ✓" : "Non-iOS ✗"}`);
+    console.log(`----------------------------------------------------------------------`);
 
     let usedCount = 0;
     const tableData = [];
@@ -95,41 +91,57 @@ async function main() {
       const record = statusMap.get(`${u.id}:${f.key}`);
       const isUsed = record && record.status === "used";
       const isIntroduced = record && record.status === "introduced";
+      const userUnlocked = hasAccess(u.subscription_tier, f.minTier);
       if (isUsed) usedCount++;
 
-      let statusBadge = "⏳ Pending";
-      if (isUsed) statusBadge = "✅ Used";
-      else if (isIntroduced) statusBadge = "📣 Introduced (Chat)";
+      let applicable = true;
+      if (typeof f.isApplicable === "function") {
+        applicable = await f.isApplicable(u.id, u);
+      }
+
+      let statusBadge = "⏳ Ready to Try";
+      if (!applicable) {
+        statusBadge = "🚫 N/A (Hardware/Gender)";
+      } else if (isUsed) {
+        statusBadge = "✅ Used";
+      } else if (isIntroduced) {
+        statusBadge = userUnlocked ? "📣 Introduced (Direct)" : "📣 Introduced (Upgrade Teaser)";
+      } else if (!userUnlocked) {
+        statusBadge = `🔒 Locked (${f.minTier === 'premium' ? 'Premium' : 'Rooka+'})`;
+      }
 
       tableData.push({
         "Feature Name": f.name,
         "Key": f.key,
+        "Tier": f.minTier || "free",
         "Status": statusBadge,
-        "First Used / Introduced": isUsed
-          ? (record.first_used_at || "Yes")
+        "Activity": isUsed
+          ? (record.first_used_at || "Used")
           : isIntroduced
-          ? (record.introduced_at || "Yes")
+          ? (record.introduced_at || "Introduced")
           : "-"
       });
     }
 
     console.table(tableData);
 
-    const nextFeature = await getNextUnusedFeatureForUser(u.id);
+    const nextFeature = await getNextUnusedFeatureForUser(u.id, u);
     const pct = Math.round((usedCount / FEATURES_REGISTRY.length) * 100);
     console.log(`📊 Adoption Score: ${usedCount}/${FEATURES_REGISTRY.length} features used (${pct}%)`);
     if (nextFeature) {
-      console.log(`👉 Next feature to introduce: "${nextFeature.name}" (${nextFeature.key})`);
+      const nextUnlocked = hasAccess(u.subscription_tier, nextFeature.minTier);
+      console.log(`👉 Next in queue: "${nextFeature.name}" (${nextFeature.key})`);
+      console.log(`   Message Type:  ${nextUnlocked ? "🚀 Direct feature action prompt" : `💎 Upgrade teaser for ${nextFeature.minTier === 'premium' ? 'Rooka Premium' : 'Rooka+'}`}`);
     } else {
-      console.log(`🎉 All features have been introduced or used!`);
+      console.log(`🎉 All applicable features have been introduced or used!`);
     }
     console.log("");
   }
 
-  // 2. Global Feature Popularity Table
-  console.log("==================================================");
-  console.log("            Overall Feature Adoption Rates        ");
-  console.log("==================================================");
+  // 3. Global Feature Popularity Table
+  console.log("======================================================================");
+  console.log("                 Overall Feature Adoption Statistics                  ");
+  console.log("======================================================================");
 
   const globalFeatureStats = FEATURES_REGISTRY.map((f) => {
     let usedBy = 0;
@@ -142,6 +154,7 @@ async function main() {
     return {
       "Feature": f.name,
       "Key": f.key,
+      "Tier": f.minTier || "free",
       "Used By": `${usedBy} / ${users.length} (${Math.round((usedBy / users.length) * 100)}%)`,
       "Introduced In Chat": `${introducedTo} user(s)`
     };
@@ -149,7 +162,7 @@ async function main() {
 
   console.table(globalFeatureStats);
 
-  // 3. Optional: Trigger feature onboarding chat message right now
+  // 4. Optional: Trigger feature onboarding chat message right now
   if (shouldTrigger) {
     console.log("\n🚀 Triggering feature onboarding job now...");
     await runWeeklyFeatureOnboardingJob();
