@@ -158,7 +158,7 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
   }
 
   db.get(
-    `SELECT coach_tone, coach_name, coach_context, athlete_context, gender, long_term_memory, daily_token_usage, common_token_usage, last_token_reset_date, daily_token_limit, subscription_tier, role, daily_image_count, last_image_reset_date FROM users WHERE id = ?`,
+    `SELECT coach_tone, coach_name, coach_context, athlete_context, gender, long_term_memory, daily_token_usage, common_token_usage, last_token_reset_date, daily_token_limit, subscription_tier, role, daily_image_count, last_image_reset_date, training_availability FROM users WHERE id = ?`,
     [req.user.id],
     async (err, user) => {
       if (err) {
@@ -182,7 +182,8 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
           subscription_tier: 'rooka_plus',
           role: 'user',
           daily_image_count: 0,
-          last_image_reset_date: new Date().toISOString().split("T")[0]
+          last_image_reset_date: new Date().toISOString().split("T")[0],
+          training_availability: null
         };
       }
 
@@ -485,18 +486,77 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
                                         },
                                       ).join(", ");
 
-                                      const gamification =
-                                        await getUserGamificationContext(
-                                          req.user.id,
-                                        );
+                                       const gamification =
+                                         await getUserGamificationContext(
+                                           req.user.id,
+                                         );
 
-                                      const coachName = user.coach_name || 'Rooka';
-                                      let coachToneText = user.coach_tone;
-                                      if (user.coach_tone === 'custom' || user.coach_tone === 'Configure own coach') {
-                                          coachToneText = user.coach_context ? `Custom tone: ${user.coach_context}` : 'Custom coach persona';
-                                      }
+                                       // Fetch recurring weekly sports (non-Rooka activities)
+                                       const recurringRows = await new Promise((resolve) => {
+                                         db.all(
+                                           `SELECT title, day_of_week, start_time, duration_minutes, sport, intensity FROM recurring_trainings WHERE user_id = ? AND is_active = 1 ORDER BY id ASC`,
+                                           [req.user.id],
+                                           (err, rows) => resolve(err || !rows ? [] : rows)
+                                         );
+                                       });
+                                       let recurringTrainingsText = "No recurring weekly sports configured.";
+                                       if (recurringRows && recurringRows.length > 0) {
+                                         recurringTrainingsText = recurringRows
+                                           .map(
+                                             (r) =>
+                                               `- ${r.day_of_week}: "${r.title}" (Sport: ${r.sport || 'Other'}, Duration: ${r.duration_minutes || 60}m, Intensity: ${r.intensity || 'moderate'}${r.start_time ? `, Start Time: ${r.start_time}` : ''})`
+                                           )
+                                           .join("\n                    ");
+                                       }
 
-                                      const systemPrompt = `You are a real, highly experienced endurance coach sending text messages to an athlete.
+                                       // Parse daily exercise limitations & training availability
+                                       let availabilityText = "No specific schedule boundaries or daily duration limits set.";
+                                       if (user.training_availability) {
+                                         try {
+                                           const availObj = typeof user.training_availability === 'string'
+                                             ? JSON.parse(user.training_availability)
+                                             : user.training_availability;
+                                           if (availObj && typeof availObj === 'object' && Object.keys(availObj).length > 0) {
+                                             const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                             const dayNames = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+                                             const formattedDays = [];
+
+                                             dayOrder.forEach((d) => {
+                                               const match = availObj[d] || availObj[d.toLowerCase()] || availObj[d.toUpperCase()] ||
+                                                 availObj[dayNames[d]] || availObj[dayNames[d].toLowerCase()];
+                                               if (match) {
+                                                 const isAvail = match.available !== false && match.status !== 'blocked';
+                                                 const maxM = match.maxMinutes !== undefined ? match.maxMinutes : (match.max_minutes !== undefined ? match.max_minutes : 0);
+                                                 formattedDays.push(`- ${dayNames[d]}: ${isAvail && maxM > 0 ? `Available (Max: ${maxM} min)` : 'Rest day / Blocked (0 min)'}`);
+                                               }
+                                             });
+
+                                             Object.entries(availObj).forEach(([day, data]) => {
+                                               const dNorm = day.slice(0, 3).toLowerCase();
+                                               const matchedOrder = dayOrder.some(d => d.toLowerCase() === dNorm);
+                                               if (!matchedOrder && data) {
+                                                 const isAvail = data.available !== false && data.status !== 'blocked';
+                                                 const maxM = data.maxMinutes ?? data.max_minutes ?? 0;
+                                                 formattedDays.push(`- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${isAvail && maxM > 0 ? `Available (Max: ${maxM} min)` : 'Rest day / Blocked (0 min)'}`);
+                                               }
+                                             });
+
+                                             if (formattedDays.length > 0) {
+                                               availabilityText = formattedDays.join("\n                    ");
+                                             }
+                                           }
+                                         } catch (e) {
+                                           console.error("Error parsing training_availability:", e);
+                                         }
+                                       }
+
+                                       const coachName = user.coach_name || 'Rooka';
+                                       let coachToneText = user.coach_tone;
+                                       if (user.coach_tone === 'custom' || user.coach_tone === 'Configure own coach') {
+                                           coachToneText = user.coach_context ? `Custom tone: ${user.coach_context}` : 'Custom coach persona';
+                                       }
+
+                                       const systemPrompt = `You are a real, highly experienced endurance coach sending text messages to an athlete.
                     Name coach: ${coachName}
                     Tone: ${coachToneText}
                     ${user.coach_context ? `Coach Custom Context & Rules: ${user.coach_context}` : ''}
@@ -530,10 +590,16 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
                     PHYSIOLOGICAL METRICS:
                     ${metricsText}
                     
-                     UPCOMING EVENTS/MILESTONES:
+                    UPCOMING EVENTS/MILESTONES:
                     ${milestonesText}
 
                     ${goalContext.promptContext}
+
+                    DAILY EXERCISE LIMITATIONS & WEEKLY SCHEDULE BOUNDARIES:
+                    ${availabilityText}
+
+                    RECURRING SPORTS & PERIODICAL TRAININGS (NON-ROOKA ACTIVITIES):
+                    ${recurringTrainingsText}
 
                     UPCOMING SCHEDULED WORKOUTS (Microplan):
                     ${planText}
@@ -566,37 +632,46 @@ router.post("/api/chat", authenticateToken, async (req, res) => {
 
                     CRITICAL RULES:
                     0. ACTIVITY TYPE (SPORT): The 'sport' field is REQUIRED for every workout in the JSON and MUST be exactly one of: 'Run', 'Bike', 'Swim', 'Strength', 'Rest'. Never leave it blank. For Strength workouts, you MUST include an "exerciseName" in each step.
-                    1. CONCISE CHAT APPLICATION STYLE & MULTI-MESSAGE BREAKS (CRITICAL): Act like a real coach texting in a mobile chat app (such as WhatsApp or iMessage). Keep your conversational text formulated concisely, punchily, directly, and naturally (typically 1-3 short sentences or paragraphs). If you need to send multiple distinct messages or break up a larger thought into separate chat bubbles, use "<br>" or "---MSG---" between each message. The app will split them and display them in the exact right order.
-                    2. RETRIES & REPEATED MESSAGES (CRITICAL): If the athlete's message seems repeated or identical to a previous message (which happens when a mobile user retries after a connection error), NEVER say things like "did you want to tell me this twice?" or "you already said that". Treat it naturally and helpfully as a single message, and NEVER duplicate activity or diet logs.
-                    3. NEVER repeat your previous greetings, praises, or paragraphs verbatim. Do not bring up old topics unless the athlete explicitly mentions them.
-                    4. Always use metric measurements exclusively (meters for distance, km/h for speed, min/km for pace). Never use imperial units. IMPORTANT: For 'distance' condition_type in the JSON steps, the condition_value MUST be in pure METERS (e.g., use 5000 for a 5km interval, NOT 5).
-                    5. Respond directly with your conversational text. Do not wrap your main reply in JSON.
-                    6. CRITICAL DATE CONTEXT: If an activity in the user's recent history is tagged with [TODAY], you MUST refer to it as happening "today". NEVER refer to a [TODAY] activity as "yesterday" or "last night".
-                    7. INJURY GUARDRAILS:
+                    1. DAILY EXERCISE LIMITATIONS & TIME BUDGET COMPLIANCE (CRITICAL):
+                       - You MUST strictly respect the athlete's daily limitations and schedule boundaries under 'DAILY EXERCISE LIMITATIONS & WEEKLY SCHEDULE BOUNDARIES'.
+                       - NEVER prescribe, suggest, or schedule a workout whose total duration exceeds the athlete's stated maximum minutes for that specific day (e.g. if Thursday is capped at 45 minutes, total workout duration including warmup and cooldown MUST NOT exceed 45 minutes).
+                       - If a day is designated as 'Rest day / Blocked', do NOT prescribe or schedule an active workout on that day. Respect their recovery time and personal commitments unless the athlete explicitly and deliberately asks you to add a session.
+                    2. RECURRING SPORTS & PERIODICAL TRAININGS HARMONY (CRITICAL):
+                       - The athlete has fixed recurring weekly sports/trainings listed under 'RECURRING SPORTS & PERIODICAL TRAININGS (NON-ROOKA ACTIVITIES)'.
+                       - Factor these sessions into total weekly fatigue and recovery requirements.
+                       - NEVER prescribe an intense or exhausting endurance workout on the same day as a high-intensity recurring sport.
+                       - Always account for and reference their recurring sports when reviewing their weekly training volume, scheduling workouts, or giving daily advice.
+                    3. CONCISE CHAT APPLICATION STYLE & MULTI-MESSAGE BREAKS (CRITICAL): Act like a real coach texting in a mobile chat app (such as WhatsApp or iMessage). Keep your conversational text formulated concisely, punchily, directly, and naturally (typically 1-3 short sentences or paragraphs). If you need to send multiple distinct messages or break up a larger thought into separate chat bubbles, use "<br>" or "---MSG---" between each message. The app will split them and display them in the exact right order.
+                    4. RETRIES & REPEATED MESSAGES (CRITICAL): If the athlete's message seems repeated or identical to a previous message (which happens when a mobile user retries after a connection error), NEVER say things like "did you want to tell me this twice?" or "you already said that". Treat it naturally and helpfully as a single message, and NEVER duplicate activity or diet logs.
+                    5. NEVER repeat your previous greetings, praises, or paragraphs verbatim. Do not bring up old topics unless the athlete explicitly mentions them.
+                    6. Always use metric measurements exclusively (meters for distance, km/h for speed, min/km for pace). Never use imperial units. IMPORTANT: For 'distance' condition_type in the JSON steps, the condition_value MUST be in pure METERS (e.g., use 5000 for a 5km interval, NOT 5).
+                    7. Respond directly with your conversational text. Do not wrap your main reply in JSON.
+                    8. CRITICAL DATE CONTEXT: If an activity in the user's recent history is tagged with [TODAY], you MUST refer to it as happening "today". NEVER refer to a [TODAY] activity as "yesterday" or "last night".
+                    9. INJURY GUARDRAILS:
                        - If ACTIVE INJURIES lists "No active injuries or niggles reported", treat the athlete as 100% healthy with ZERO physical restrictions.
                        - Only if an injury is currently active:
                          * Lower Body (Severity 3+): Avoid high-impact running. Substitute with swimming or indoor cycling.
                          * Grip/Hands: Substitute swimming/heavy upper-body with running or indoor cycling.
                          * Severity 5: Schedule complete rest for the affected area.
                          * Explain any substitution made due to an active injury.
-                    5. BRICK WORKOUTS: If you prescribe a multi-sport Brick workout (e.g., Bike + Run), you MUST create two separate objects in the JSON array (one for "Bike", one for "Run") for that same date.
-                    6. INTERVALS: To create a repeating block (e.g., 8x 1000m fast, 1min rest), use a "repeat" object in steps_json with "iterations" and an array of "steps".
-                    7. SENTIMENT & SUPPORT: Pay close attention to the athlete's physical and mental state. If they mention soreness, exhaustion, poor sleep, or lack of motivation, immediately prioritize empathy and recovery. Strongly advise them to rest or dial back intensity, even if it means modifying the plan.
-                    8. STRENGTH & FUNCTIONAL TRAINING PARITY (CRITICAL):
+                    10. BRICK WORKOUTS: If you prescribe a multi-sport Brick workout (e.g., Bike + Run), you MUST create two separate objects in the JSON array (one for "Bike", one for "Run") for that same date.
+                    11. INTERVALS: To create a repeating block (e.g., 8x 1000m fast, 1min rest), use a "repeat" object in steps_json with "iterations" and an array of "steps".
+                    12. SENTIMENT & SUPPORT: Pay close attention to the athlete's physical and mental state. If they mention soreness, exhaustion, poor sleep, or lack of motivation, immediately prioritize empathy and recovery. Strongly advise them to rest or dial back intensity, even if it means modifying the plan.
+                    13. STRENGTH & FUNCTIONAL TRAINING PARITY (CRITICAL):
                        - Only prescribe 'Strength' workouts if the Athlete Context explicitly mentions strength training, weightlifting, or being a hybrid athlete.
                        - EXERCISE & STEP PARITY MANDATE: EVERY single exercise, station, carry, lift, or core movement described in 'details' MUST have its own corresponding repeat block or step in the 'steps' (or 'steps_json') array! NEVER omit exercises or only output 1 exercise when multiple exercises were prescribed in 'details'.
                        - For Strength workouts, put each exercise into 'steps' with "condition_type": "reps" (for reps), "distance" (in meters for carries/sled pushes, e.g. 100), or "time_sec"/"time" (for planks/timed holds). Set "condition_value" to the number of reps, meters, or seconds. Add "weight": <kg_number> and "exerciseName": "<name>" to the step object. Use standard exercise names (e.g., "Barbell Back Squat", "Farmers Carry", "Pallof Press").
                        - Between sets, use a "rest" step with "condition_type": "time_sec" and set "condition_value" to the number of SECONDS to rest (e.g., 90 for 90 seconds).
                        - On Warmup and Cooldown steps, ALWAYS include "exerciseName" specifying the mobility drills or stretches (e.g., "Cossack Squats & Inchworms", "Couch Stretch & Pigeon Pose").
                        - Reference the Athlete Context for their past weights, and try to prescribe slight progressive overload (e.g., +2.5kg).
-                    9. TARGETS: If a workout step requires a specific pace or power target:
+                    14. TARGETS: If a workout step requires a specific pace or power target:
                        - For exact pace (e.g. 4:15 min/km): set "target_type": "pace.exact" and set "target_value": "4:15" (do NOT include "min/km" in target_value!).
                        - For exact power (e.g. 250W): set "target_type": "power.exact" and set "target_value": "250" (do NOT include "W" in target_value!).
                        - For a power zone instead of an exact wattage: set "target_type": "power.zone" and "zone": <1-7>.
                        - For HR Zones: set "target_type": "heart.rate.zone" and "zone": <1-5>.
                        - For open targets: set "target_type": "no.target".
-                    10. PREDICTIVE LOGISTICS: If the WEATHER ALERT is active and the user agrees to move an outdoor workout (Bike/Run) indoors, use the JSON block to update their microplan (e.g. changing 'Bike' to 'Zwift' or 'Run' to 'Treadmill').
-                    11. GAMIFICATION (CRITICAL):
+                    15. PREDICTIVE LOGISTICS: If the WEATHER ALERT is active and the user agrees to move an outdoor workout (Bike/Run) indoors, use the JSON block to update their microplan (e.g. changing 'Bike' to 'Zwift' or 'Run' to 'Treadmill').
+                    16. GAMIFICATION (CRITICAL):
                         - The athlete's current activity streak is: ${gamification.streak} days.
                         - The athlete has earned a total of ${gamification.bonusPoints} bonus rooka points.
                         - The athlete's latest earned title/badge is: "${gamification.latestTitle}".
@@ -1527,163 +1602,14 @@ router.post("/api/chat/checkin", authenticateToken, async (req, res) => {
       return res.json({ reply: morningResult.message, message: morningResult.message, mood: "hype" });
     }
     if (morningResult && morningResult.skipped) {
-      return res.json({ alreadySent: true });
+      return res.json({ alreadySent: true, reason: morningResult.reason });
     }
   } catch (mErr) {
     console.warn("sendMorningMessageForUser error during checkin:", mErr);
   }
 
-  db.get(
-    `SELECT coach_tone, coach_name, coach_context, athlete_context, gender FROM users WHERE id = ?`,
-    [req.user.id],
-    async (err, user) => {
-      if (!user) {
-        user = {
-          coach_tone: 'hype',
-          coach_name: 'Rooka',
-          coach_context: 'Empathetic athletic performance coach',
-          athlete_context: 'Active athlete',
-          gender: 'prefer_not_to_say',
-        };
-      }
-
-      db.all(
-        `SELECT name, sport_type, distance_km, moving_time_min, rooka_score, start_date, laps_json FROM activities WHERE user_id = ? ORDER BY start_date DESC LIMIT 3`,
-        [req.user.id],
-        async (err, recentActivities) => {
-          const recentActivitiesText =
-            recentActivities && recentActivities.length > 0
-              ? recentActivities
-                  .map(
-                    (a) => {
-                      let lapStr = "";
-                      if (a.laps_json) {
-                        try {
-                          const laps = JSON.parse(a.laps_json);
-                          if (laps && laps.length > 0) {
-                            lapStr = " | Laps: " + laps.map(l => {
-                              let pace = "";
-                              if (l.average_speed > 0) {
-                                const paceSecs = 1000 / l.average_speed;
-                                const m = Math.floor(paceSecs / 60);
-                                const s = Math.floor(paceSecs % 60);
-                                pace = `, ${m}:${s.toString().padStart(2, '0')}/km`;
-                              }
-                              const hr = l.average_heartrate ? `, ${Math.round(l.average_heartrate)}bpm` : "";
-                              return `[${l.name || 'Lap'}: ${(l.distance/1000).toFixed(1)}km in ${Math.round(l.moving_time/60)}m${pace}${hr}]`;
-                            }).join(" ");
-                          }
-                        } catch (e) {}
-                      }
-                      return `- ${getAMSDateString(a.start_date)}: ${a.name} (${a.sport_type}) | ${parseFloat(a.distance_km).toFixed(1)}km | ${Math.round(a.moving_time_min)}min | ${Math.round(a.rooka_score || 0)} Rooka${lapStr}`;
-                    }
-                  )
-                  .join("\n")
-              : "No recent activities recorded.";
-
-          db.all(
-            `SELECT metric, value FROM athlete_metrics WHERE user_id = ?`,
-            [req.user.id],
-            async (err, metrics) => {
-              const metricsText =
-                metrics && metrics.length > 0
-                  ? metrics.map((m) => `${m.metric}: ${m.value}`).join(", ")
-                  : "No metrics recorded.";
-
-              db.all(
-                `SELECT date, sport, description FROM micro_plan WHERE user_id = ? AND date >= date('now') ORDER BY date ASC LIMIT 2`,
-                [req.user.id],
-                async (err, upcomingPlan) => {
-                  const upcomingText =
-                    upcomingPlan && upcomingPlan.length > 0
-                      ? upcomingPlan
-                          .map(
-                            (p) => `- ${p.date}: ${p.sport} - ${p.description}`,
-                          )
-                          .join("\n")
-                      : "No upcoming workouts scheduled.";
-
-                  const phase = await getUserMacroPhase(req.user.id);
-                  const todayStr = getAMSDateString();
-                  const nowAMS = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }));
-                  const amsHour = nowAMS.getHours();
-                  const timeOfDayGreeting = amsHour < 12 ? "morning" : amsHour < 18 ? "afternoon" : "evening";
-                  const weatherContext = await getWeatherContext();
-                  const gamification = await getUserGamificationContext(
-                    req.user.id,
-                  );
-                  const coachName = user.coach_name || "Rooka";
-                  let coachToneText = user.coach_tone;
-                  if (user.coach_tone === "custom" || user.coach_tone === "Configure own coach") {
-                    coachToneText = user.coach_context ? `Custom tone: ${user.coach_context}` : "Custom coach persona";
-                  }
-                  const goalsText = await getUserGoalsContext(req.user.id);
-                  let systemPrompt = `You are ${coachName}, an elite endurance coach.
-Today is ${todayStr}. It is currently ${timeOfDayGreeting} (${nowAMS.toLocaleTimeString("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit" })}).
-${user.coach_context ? `Coach Custom Context & Rules: ${user.coach_context}` : ""}
-Athlete Context: ${user.athlete_context || "General endurance athlete"}
-Gender: ${user.gender || "Prefer not to share"}
-${(user.gender === "Female" || user.gender === "Prefer not to share" || user.gender === "Prefer not to say") && user.cycle_tracking_enabled !== 0 ? "IMPORTANT: Track menstrual cycle phases and adjust demands based on the physically demanding days of the cycle." : ""}
-Key Physiological Metrics:
-${metricsText}
-Current Macro Phase: ${phase}
-Athlete Goals (Primary & Secondary):
-${goalsText}
-Recent Completed Workouts:
-${recentActivitiesText}
-Upcoming Workouts (Next 2 days):
-${upcomingText}
-Your Tone & Persona: ${coachToneText || "empathetic"}
-
-${weatherContext}
-
-MACRO BLOCK FOCUS RULES:
-- If phase is BASE: Focus intensely on keeping their volume high and heart rate low (Zone 2). Discourage speedwork.
-- If phase is BUILD: Focus on progressing their threshold and VO2max intervals. Tell them it's time to push.
-- If phase is PEAK: Focus on race-specific intensity and sharpening. Keep them focused on executing race pace perfectly.
-- If phase is TAPER: Focus heavily on recovery and shedding fatigue. Ensure they rest up for the race.
-
-CRITICAL RULES:
-1. Generate a single, highly personalized, proactive 1-2 sentence greeting for the athlete who just opened the app. Acknowledge the time of day naturally (${timeOfDayGreeting}). If it's evening, check in on how today's efforts felt or help them wind down; if morning, look ahead to the day.
-2. Analyze their fitness (CTL), fatigue (ATL), and readiness (TSB) from their Key Physiological Metrics. Reference these trends to steer the user towards action (e.g., prioritize recovery if TSB is very negative, or push hard if TSB is positive). You can also reference a recent/upcoming workout.
-3. Keep it brief, extremely human, and supportive. 
-4. DO NOT generate any JSON or workout plan updates. Just the greeting.
-5. PREDICTIVE LOGISTICS: If the WEATHER ALERT is present and the athlete has an outdoor workout (e.g. Bike or Run) scheduled for today, you MUST proactively ask if they want to convert today's outdoor session into an indoor Zwift/treadmill session due to the miserable weather. For example: "Looks miserable out there today. Do you want me to convert today's ride into an indoor Zwift session?"
-6. GAMIFICATION: The athlete has a current activity streak of ${gamification.streak} days and has ${gamification.bonusPoints} bonus points. Occasionally mention their streak if it's impressive to hype them up.`;
-
-                  try {
-                    let aiReply = await generateWithFallback(
-                      "Generate the proactive greeting.",
-                      systemPrompt,
-                      [],
-                    );
-                    aiReply = aiReply
-                      .replace(/```json[\s\S]*?```/gi, "")
-                      .trim();
-                      
-                    const messageParts = splitCoachReply(aiReply);
-                    for (let i = 0; i < messageParts.length; i++) {
-                      await new Promise((resolve) => {
-                        db.run(
-                          `INSERT INTO chat_history (user_id, role, content, mood, timestamp) VALUES (?, 'coach', ?, 'default', datetime('now', '+${i} seconds'))`,
-                          [req.user.id, messageParts[i]],
-                          () => resolve()
-                        );
-                      });
-                    }
-                    res.json({ reply: messageParts.join('\n\n'), replies: messageParts, mood: "default" });
-                  } catch (e) {
-                    console.error("Checkin Server Error:", e);
-                    res.status(500).json({ error: "AI failed to respond." });
-                  }
-                },
-              );
-            },
-          );
-        },
-      );
-    },
-  );
+  // If already sent, already interacted, or outside morning window, do not generate unwanted messages
+  return res.json({ alreadySent: true });
 });
 
 module.exports = router;

@@ -2,7 +2,7 @@ import { BrandColors } from '@/constants/theme';
 import type * as NotificationsType from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { DeviceEventEmitter, Platform } from 'react-native';
 import { notificationsApi } from './apiServices';
 import { router } from 'expo-router';
 
@@ -139,8 +139,14 @@ export function setupNotificationListeners(
       if (onNotificationResponse) {
         onNotificationResponse(response);
       } else {
-        // Default navigation behavior
         const data = response.notification.request.content.data;
+        if (
+          data?.type === 'coach' ||
+          data?.type === 'message' ||
+          (typeof data?.url === 'string' && data.url.includes('coach'))
+        ) {
+          DeviceEventEmitter.emit('COACH_NOTIFICATION_RECEIVED');
+        }
         if (data?.url) {
           try {
             router.push(data.url as any);

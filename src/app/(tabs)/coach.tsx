@@ -410,6 +410,7 @@ export default function CoachScreen() {
       setShowScrollDownBtn(false);
       scrollToBottom(false);
       markAsRead();
+      refreshMessages();
       // Chat never hides the bar itself, so make sure it is up on arrival:
       // swiping here mid-momentum from a tab that DID hide it would otherwise
       // leave it stranded off-screen with nothing to bring it back.
@@ -418,7 +419,7 @@ export default function CoachScreen() {
       return () => {
         markAsRead();
       };
-    }, [scrollToBottom, markAsRead, notifyScrollEnd])
+    }, [scrollToBottom, markAsRead, notifyScrollEnd, refreshMessages])
   );
 
   // 5. NEW MESSAGE WHILE PINNED

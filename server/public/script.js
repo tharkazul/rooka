@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeToggleBtn) {
       const isDark = theme === 'dark';
       themeToggleBtn.setAttribute('aria-label', isDark ? 'Switch to Daytime mode (Turquoise)' : 'Switch to Nighttime mode (Ultramarine)');
-      themeToggleBtn.setAttribute('title', isDark ? 'Switch to Daytime (Turquoise #0EA5E9)' : 'Switch to Nighttime (Deep Ultramarine #4F46E5)');
+      themeToggleBtn.setAttribute('title', isDark ? 'Switch to Daytime (Turquoise #0EA5E9)' : 'Switch to Nighttime (Ultramarine #3B82F6)');
       const labelText = themeToggleBtn.querySelector('.theme-label-text');
       if (labelText) {
         labelText.textContent = isDark ? 'Night' : 'Day';

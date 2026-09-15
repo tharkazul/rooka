@@ -39,10 +39,10 @@ export const CARD_COLORS = {
   },
   repeat: {
     bar: BrandColors.primary, // Theme Accent
-    bg: 'rgba(255, 95, 59, 0.05)',
-    border: 'rgba(255, 95, 59, 0.3)',
+    bg: 'rgba(14, 165, 233, 0.05)',
+    border: 'rgba(14, 165, 233, 0.3)',
     text: BrandColors.primary,
-    badgeBg: 'rgba(255, 95, 59, 0.15)',
+    badgeBg: 'rgba(14, 165, 233, 0.15)',
   },
   default: {
     bar: '#94A3B8', // Slate

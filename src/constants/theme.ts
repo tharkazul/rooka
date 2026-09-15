@@ -8,10 +8,10 @@ import '@/global.css';
 import { Platform } from 'react-native';
 
 export const BrandColors = {
-  primary: '#0EA5E9',
-  deep: '#0284C7',
+  primary: '#0EA5E9',      // Daytime Turquoise / Sky
+  deep: '#0284C7',         // Deep Sky
   ink: '#1B1B1F',
-  accentDark: '#4F46E5',
+  accentDark: '#3B82F6',   // Nighttime Ultramarine
 } as const;
 
 /**
@@ -27,8 +27,8 @@ export const BrandColors = {
  * -- two different oranges on the same element. Call accentAlpha() instead.
  */
 export const BrandRgb = {
-  primary: '14, 165, 233',     // #0EA5E9
-  accentDark: '79, 70, 229',   // #4F46E5
+  primary: '14, 165, 233',     // #0EA5E9 (Turquoise / Sky)
+  accentDark: '59, 130, 246',  // #3B82F6 (Ultramarine)
 } as const;
 
 /** Brand accent at `alpha`. Pass dark=true on a dark canvas. */
@@ -69,7 +69,7 @@ export const SportColors = {
     CARDIO: '#E0625A', HIIT: '#E0625A', STRENGTH: '#B36AE0', YOGA: '#2EBFAF',
     MOBILITY: '#2EBFAF', WALK: '#8FA82E', HIKE: '#8FA82E', REST: '#6F6F79',
     ROWING: '#0284C7', WINTER: '#38BDF8', RACQUET: '#84CC16', SOCCER: '#10B981',
-    BASKETBALL: BrandColors.primary, GOLF: '#22C55E', COMBAT: '#EF4444', FITNESS: '#F43F5E',
+    BASKETBALL: '#F97316', GOLF: '#22C55E', COMBAT: '#EF4444', FITNESS: '#F43F5E',
     DEFAULT: BrandColors.primary,
   },
   dark: {

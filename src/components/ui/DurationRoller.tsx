@@ -65,8 +65,8 @@ export function DurationRoller({
   // renders invisible.
   const selectedColor = BrandColors.primary;
   const idleColor = isDark ? '#64748B' : '#94A3B8';
-  const trackColor = isDark ? 'rgba(255,95,59,0.12)' : 'rgba(255,95,59,0.08)';
-  const trackBorder = 'rgba(255,95,59,0.45)';
+  const trackColor = isDark ? 'rgba(14, 165, 233,0.12)' : 'rgba(14, 165, 233,0.08)';
+  const trackBorder = 'rgba(14, 165, 233,0.45)';
 
   const clampIndex = useCallback(
     (i: number) => Math.max(0, Math.min(options.length - 1, i)),

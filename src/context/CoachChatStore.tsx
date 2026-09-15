@@ -640,17 +640,7 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       const res = await chatApi.checkin();
       const msgContent = (res as any)?.reply || (res as any)?.message;
       if (msgContent) {
-        const parts = splitCoachReply(msgContent);
-        const baseTs = Date.now();
-        const newMsgs = parts.map((part, idx) =>
-          processMessageItem({
-            id: `coach-checkin-${baseTs}-${idx}`,
-            content: part,
-            role: 'coach',
-            timestamp: new Date(baseTs + idx * 500).toISOString(),
-          })
-        );
-        setMessages((prev) => [...prev, ...newMsgs]);
+        await refreshMessages();
       }
     } catch (err: any) {
       console.error('Checkin error:', err);
@@ -672,15 +662,32 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
-    refreshMessages();
+    const initChat = async () => {
+      await refreshMessages();
 
-    // Check once per day to catch up on morning message if 08:00 cron was missed (morning only)
-    const todayStr = new Date().toISOString().split('T')[0];
-    const currentHour = new Date().getHours();
-    if (lastCheckinAttemptRef.current !== todayStr && currentHour < 13) {
-      lastCheckinAttemptRef.current = todayStr;
-      checkin();
-    }
+      // Check once per day to catch up on morning message if 08:00 cron was missed (08:00 - 13:00 only)
+      const now = new Date();
+      const currentHour = now.getHours();
+      const todayStr = now.toISOString().split('T')[0];
+      if (lastCheckinAttemptRef.current !== todayStr && currentHour >= 8 && currentHour < 13) {
+        lastCheckinAttemptRef.current = todayStr;
+        // If there is already any message today, do not run catch-up
+        const hasTodayMsg = messagesRef.current.some((m) => {
+          if (!m.timestamp) return false;
+          try {
+            return new Date(m.timestamp).toISOString().split('T')[0] === todayStr;
+          } catch (_) {
+            return false;
+          }
+        });
+
+        if (!hasTodayMsg) {
+          await checkin();
+        }
+      }
+    };
+
+    initChat();
 
     const unsubCoachResponse = wsService.subscribeToEvent('coach_response', (data: any) => {
       const content = typeof data === 'string' ? data : data.content || data.reply || data.message;
@@ -794,6 +801,12 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       refreshMessages();
     });
 
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        refreshMessages();
+      }
+    });
+
     return () => {
       unsubCoachResponse();
       unsubChatMessage();
@@ -802,6 +815,7 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       unsubChatImageFailed();
       unsubUnreadMessage();
       subNotification.remove();
+      appStateSub.remove();
     };
   }, [isAuthenticated]);
 

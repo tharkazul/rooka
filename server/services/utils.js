@@ -3340,34 +3340,40 @@ module.exports = {
 async function sendMorningMessageForUser(userId, { force = false } = {}) {
   const todayStr = getAMSDateString();
 
-  // 1. Check if a morning message was already sent today or if morning window has passed
+  // 1. Check if a morning message was already sent today, if athlete already chatted, or if morning window is invalid
   if (!force) {
     const nowAMS = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }));
-    if (nowAMS.getHours() >= 13) {
-      return { skipped: true, reason: "Morning window has passed" };
+    const currentHour = nowAMS.getHours();
+    if (currentHour < 8 || currentHour >= 13) {
+      return { skipped: true, reason: `Outside morning window (08:00 - 13:00, current hour in Amsterdam: ${currentHour})` };
     }
 
-    const alreadySent = await new Promise((resolve) => {
+    const alreadyInteractedToday = await new Promise((resolve) => {
       db.get(
-        `SELECT id FROM chat_history 
+        `SELECT id, role, mood FROM chat_history 
          WHERE user_id = ? 
-           AND role = 'coach' 
-           AND mood = 'hype' 
-           AND date(timestamp) = date('now') 
+           AND date(timestamp, 'localtime') = ? 
+           AND (
+             role = 'user' 
+             OR (role = 'coach' AND time(timestamp, 'localtime') >= '04:00:00')
+           )
          LIMIT 1`,
-        [userId],
-        (err, row) => resolve(!!row)
+        [userId, todayStr],
+        (err, row) => resolve(row)
       );
     });
-    if (alreadySent) {
-      return { skipped: true, reason: "Already sent today" };
+    if (alreadyInteractedToday) {
+      return { 
+        skipped: true, 
+        reason: `Athlete already interacted or received message today (msg #${alreadyInteractedToday.id}, role: ${alreadyInteractedToday.role})` 
+      };
     }
   }
 
   // 2. Load user details
   const user = await new Promise((resolve) => {
     db.get(
-      `SELECT u.id, u.coach_tone, u.coach_name, u.coach_context, u.athlete_context, u.gender 
+      `SELECT u.id, u.coach_tone, u.coach_name, u.coach_context, u.athlete_context, u.gender, u.training_availability 
        FROM users u 
        WHERE u.id = ? AND u.deleted_at IS NULL AND u.onboarding_completed = 1`,
       [userId],
@@ -3376,6 +3382,17 @@ async function sendMorningMessageForUser(userId, { force = false } = {}) {
   });
 
   if (!user) return { skipped: true, reason: "User not found or not onboarded" };
+
+  // 2b. Load active recurring trainings
+  const recurringRows = await new Promise((resolve) => {
+    db.all(
+      `SELECT title, day_of_week, start_time, duration_minutes, sport, intensity 
+       FROM recurring_trainings 
+       WHERE user_id = ? AND is_active = 1`,
+      [userId],
+      (err, rows) => resolve(err || !rows ? [] : rows)
+    );
+  });
 
   // 3. Load today's planned workouts (independent of whether user has goals)
   const workouts = await new Promise((resolve) => {
@@ -3426,7 +3443,48 @@ async function sendMorningMessageForUser(userId, { force = false } = {}) {
     );
   });
 
+  // Check today's daily exercise limitation & recurring sports
+  const currentAMSDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Amsterdam" }));
+  const amsDayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][currentAMSDate.getDay()];
+  const amsDayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][currentAMSDate.getDay()];
+
+  let todayAvailabilityNote = "";
+  if (user.training_availability) {
+    try {
+      const avail = typeof user.training_availability === 'string'
+        ? JSON.parse(user.training_availability)
+        : user.training_availability;
+      const todayAvail = avail[amsDayShort] || avail[amsDayShort.toLowerCase()] || avail[amsDayName] || avail[amsDayName.toLowerCase()];
+      if (todayAvail) {
+        const isAvail = todayAvail.available !== false && todayAvail.status !== 'blocked';
+        const maxM = todayAvail.maxMinutes !== undefined ? todayAvail.maxMinutes : (todayAvail.max_minutes !== undefined ? todayAvail.max_minutes : 0);
+        if (!isAvail || maxM === 0) {
+          todayAvailabilityNote = `Athlete's weekly profile designates today (${amsDayName}) as a REST / RECOVERY DAY (0 minutes available).`;
+        } else {
+          todayAvailabilityNote = `Athlete's weekly profile has a daily training limit of max ${maxM} minutes for today (${amsDayName}).`;
+        }
+      }
+    } catch (_) {}
+  }
+
+  const todayRecurring = (recurringRows || []).filter((r) => {
+    const rDay = (r.day_of_week || "").trim().toLowerCase();
+    return rDay === amsDayName.toLowerCase() || rDay === amsDayShort.toLowerCase() || rDay.startsWith(amsDayShort.toLowerCase());
+  });
+  let todayRecurringNote = "";
+  if (todayRecurring.length > 0) {
+    todayRecurringNote = `Athlete has recurring non-Rooka weekly session(s) today: ` +
+      todayRecurring.map(r => `"${r.title}" (${r.sport || 'Sport'}, ${r.duration_minutes || 60}m, ${r.intensity || 'moderate'}${r.start_time ? ` at ${r.start_time}` : ''})`).join(", ") +
+      `. Cheer them on or factor this into their day!`;
+  }
+
   let prompt = `It is morning (${todayStr}). You are the athlete's coach. Write a short, proactive, energetic morning message. `;
+  if (todayAvailabilityNote) {
+    prompt += `${todayAvailabilityNote} `;
+  }
+  if (todayRecurringNote) {
+    prompt += `${todayRecurringNote} `;
+  }
 
   if (raceToday) {
     prompt += `🚨 CRITICAL - TODAY IS RACE DAY: "${raceToday.name}"! This is the big target event the athlete has trained for over months! Write an inspiring, electrifying, confident race-day coach message. Wish them good luck, tell them to trust their training, stick to their hydration and pacing strategy, and leave everything on the course! `;
@@ -3459,8 +3517,8 @@ async function sendMorningMessageForUser(userId, { force = false } = {}) {
 
   await new Promise((resolve, reject) => {
     db.run(
-      `INSERT INTO chat_history (user_id, role, content, mood) VALUES (?, 'coach', ?, 'hype')`,
-      [user.id, aiReply],
+      `INSERT INTO chat_history (user_id, role, content, mood, payload_json) VALUES (?, 'coach', ?, 'hype', ?)`,
+      [user.id, aiReply, JSON.stringify({ type: 'morning_message' })],
       (err) => {
         if (err) return reject(err);
         sendSSEEvent(user.id, "unread_message", {

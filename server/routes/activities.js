@@ -775,16 +775,61 @@ router.post("/api/generate-plan", authenticateToken, async (req, res) => {
                   .join("\n");
               }
 
-              let availabilityText = "No specific schedule boundaries set.";
+              let availabilityText = "No specific schedule boundaries or daily duration limits set.";
               if (user.training_availability) {
                 try {
-                  const availObj = JSON.parse(user.training_availability);
-                  availabilityText = Object.entries(availObj)
-                    .map(([day, data]) => {
-                      return `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${data.status} (Max minutes: ${data.max_minutes})`;
-                    })
-                    .join("\n            ");
-                } catch (e) {}
+                  const availObj = typeof user.training_availability === 'string'
+                    ? JSON.parse(user.training_availability)
+                    : user.training_availability;
+                  if (availObj && typeof availObj === 'object' && Object.keys(availObj).length > 0) {
+                    const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                    const dayNames = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+                    const formattedDays = [];
+
+                    dayOrder.forEach((d) => {
+                      const match = availObj[d] || availObj[d.toLowerCase()] || availObj[d.toUpperCase()] ||
+                        availObj[dayNames[d]] || availObj[dayNames[d].toLowerCase()];
+                      if (match) {
+                        const isAvail = match.available !== false && match.status !== 'blocked';
+                        const maxM = match.maxMinutes !== undefined ? match.maxMinutes : (match.max_minutes !== undefined ? match.max_minutes : 0);
+                        formattedDays.push(`- ${dayNames[d]}: ${isAvail && maxM > 0 ? `Available (Max: ${maxM} min)` : 'Rest day / Blocked (0 min)'}`);
+                      }
+                    });
+
+                    Object.entries(availObj).forEach(([day, data]) => {
+                      const dNorm = day.slice(0, 3).toLowerCase();
+                      const matchedOrder = dayOrder.some(d => d.toLowerCase() === dNorm);
+                      if (!matchedOrder && data) {
+                        const isAvail = data.available !== false && data.status !== 'blocked';
+                        const maxM = data.maxMinutes ?? data.max_minutes ?? 0;
+                        formattedDays.push(`- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${isAvail && maxM > 0 ? `Available (Max: ${maxM} min)` : 'Rest day / Blocked (0 min)'}`);
+                      }
+                    });
+
+                    if (formattedDays.length > 0) {
+                      availabilityText = formattedDays.join("\n                ");
+                    }
+                  }
+                } catch (e) {
+                  console.error("Error parsing training_availability:", e);
+                }
+              }
+
+              const recurringRows = await new Promise((resolve) => {
+                db.all(
+                  `SELECT title, day_of_week, start_time, duration_minutes, sport, intensity FROM recurring_trainings WHERE user_id = ? AND is_active = 1 ORDER BY id ASC`,
+                  [req.user.id],
+                  (err, rows) => resolve(err || !rows ? [] : rows)
+                );
+              });
+              let recurringTrainingsText = "No recurring weekly sports configured.";
+              if (recurringRows && recurringRows.length > 0) {
+                recurringTrainingsText = recurringRows
+                  .map(
+                    (r) =>
+                      `- ${r.day_of_week}: "${r.title}" (Sport: ${r.sport || 'Other'}, Duration: ${r.duration_minutes || 60}m, Intensity: ${r.intensity || 'moderate'}${r.start_time ? `, Start Time: ${r.start_time}` : ''})`
+                  )
+                  .join("\n                ");
               }
 
               db.all(
@@ -818,8 +863,10 @@ router.post("/api/generate-plan", authenticateToken, async (req, res) => {
                 Athlete Primary Goal: ${goalContext.goalName} (${goalContext.goalDate || 'Target Date TBD'})
                 Gender: ${user.gender || "Prefer not to share"}
                 ${(user.gender === "Female" || user.gender === "Prefer not to share" || user.gender === "Prefer not to say") && user.cycle_tracking_enabled !== 0 ? "IMPORTANT: Adjust training load taking the menstrual cycle into consideration. Distribute exercises carefully around the physically demanding days." : ""}
-                Schedule Boundaries:
+                Daily Exercise Limitations & Schedule Boundaries:
                 ${availabilityText}
+                Recurring Sports & Periodical Trainings (Non-Rooka Activities):
+                ${recurringTrainingsText}
                 Key Physiological Metrics: ${metricsText}
                 MUSCLE LOAD OVER THE LAST 7 DAYS (0-100% of a reference load, derived from completed activities):
                     ${muscleStatusText}
@@ -833,7 +880,10 @@ router.post("/api/generate-plan", authenticateToken, async (req, res) => {
             CRITICAL RULES:
             0. ACTIVITY TYPE (SPORT): The 'sport' field is REQUIRED for every workout in the JSON and MUST be exactly one of: 'Run', 'Bike', 'Swim', 'Strength', 'Rest'. Never leave it blank. For Strength workouts, you MUST include an "exerciseName" in each step.
             1. You are generating a 7-day training plan starting exactly on ${targetDate}.
-            2. SCHEDULE BOUNDARIES: You MUST adhere to the daily time constraints listed in "Schedule Boundaries". If a day is marked 'blocked' or max_minutes is 0, you are strictly forbidden from scheduling any active training on that day (you may only schedule 'Rest'). Do not spike the ATL excessively on a single day to compensate; distribute the load safely across the 'Available' and 'Time-Capped' days.
+            2. DAILY EXERCISE LIMITATIONS & RECURRING SPORTS (CRITICAL):
+               - Adhere strictly to the daily time constraints listed in "Daily Exercise Limitations & Schedule Boundaries". NEVER schedule a workout exceeding the stated max minutes for that day.
+               - If a day is marked 'Rest day / Blocked' or max minutes is 0, you are strictly forbidden from scheduling any active training on that day (you may only schedule 'Rest').
+               - Account for all sessions listed in "Recurring Sports & Periodical Trainings". Factor their fatigue and intensity into the athlete's weekly load and NEVER schedule conflicting high-intensity endurance workouts on the same day. Distribute endurance volume safely across available days without spiking ATL.
             3. MUSCLE LOAD: Read "MUSCLE LOAD OVER THE LAST 7 DAYS". Any group listed HIGH is already heavily loaded — do not schedule two consecutive sessions whose main driver is that group, and prefer a sport that spares it (a HIGH quadriceps or calf reading favours swimming over running or riding). Groups not listed are fresh and available.
             4. INJURY GUARDRAILS: The athlete has active injuries listed above. You MUST alter the training plan based on this data to prevent further injury.
                - If an injury is Lower Body (Severity 3+): Strictly avoid high-impact running. Substitute required aerobic load with swimming or indoor cycling.

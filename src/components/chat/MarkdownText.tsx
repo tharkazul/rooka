@@ -105,7 +105,7 @@ const LoadingImagePlaceholder: React.FC<{
         borderRadius: 16,
         backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255, 95, 59, 0.3)' : 'rgba(255, 95, 59, 0.25)',
+        borderColor: isDark ? 'rgba(14, 165, 233, 0.3)' : 'rgba(14, 165, 233, 0.25)',
         alignItems: 'center',
         justifyContent: 'center',
       }}

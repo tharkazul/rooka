@@ -60,10 +60,10 @@
     /* Brand & Base */
     --brand-primary: #3B82F6;
     --brand-deep: #2563EB;
-    --accent: 79 70 229; /* Ultramarine - #4F46E5 */
-    --accent-hover: 99 102 241;
-    --accent-soft: rgba(79, 70, 229, 0.15);
-    --accent-border: rgba(79, 70, 229, 0.35);
+    --accent: 59 130 246; /* Ultramarine - #3B82F6 */
+    --accent-hover: 96 165 250;
+    --accent-soft: rgba(59, 130, 246, 0.16);
+    --accent-border: rgba(59, 130, 246, 0.35);
 
     /* Dark Surfaces & Text */
     --bg-main: 15 23 42; /* Obsidian Slate */
@@ -72,7 +72,7 @@
     --text-main: 248 250 252; /* Pure Chalk */
     --text-muted: 148 163 184;
     --color-focus: #3B82F6;
-    --color-metric: #4F46E5;
+    --color-metric: #3B82F6;
 
     /* Semantic Status (Dark Mode - High Contrast) */
     --color-success: 16 185 129; /* Aero Mint #10B981 */
@@ -92,7 +92,7 @@
     --sport-swim: #5BA8E8;
     --sport-ride: #6FC48A;
     --sport-run: #E0B94F;
-    --sport-cardio: #4F46E5;
+    --sport-cardio: #3B82F6;
     --sport-strength: #C48AEA;
     --sport-yoga: #10B981;
     --sport-walk: #A8C24F;
@@ -103,10 +103,10 @@
       /* Brand & Base */
       --brand-primary: #3B82F6;
       --brand-deep: #2563EB;
-      --accent: 79 70 229; /* Ultramarine - #4F46E5 */
-      --accent-hover: 99 102 241;
-      --accent-soft: rgba(79, 70, 229, 0.15);
-      --accent-border: rgba(79, 70, 229, 0.35);
+      --accent: 59 130 246; /* Ultramarine - #3B82F6 */
+      --accent-hover: 96 165 250;
+      --accent-soft: rgba(59, 130, 246, 0.16);
+      --accent-border: rgba(59, 130, 246, 0.35);
 
       /* Dark Surfaces & Text */
       --bg-main: 15 23 42; /* Obsidian Slate */
@@ -115,7 +115,7 @@
       --text-main: 248 250 252; /* Pure Chalk */
       --text-muted: 148 163 184;
       --color-focus: #3B82F6;
-      --color-metric: #4F46E5;
+      --color-metric: #3B82F6;
 
       /* Semantic Status (Dark Mode - High Contrast) */
       --color-success: 16 185 129; /* Aero Mint #10B981 */
@@ -135,7 +135,7 @@
       --sport-swim: #5BA8E8;
       --sport-ride: #6FC48A;
       --sport-run: #E0B94F;
-      --sport-cardio: #4F46E5;
+      --sport-cardio: #3B82F6;
       --sport-strength: #C48AEA;
       --sport-yoga: #10B981;
       --sport-walk: #A8C24F;
