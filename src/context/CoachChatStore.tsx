@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, DeviceEventEmitter } from 'react-native';
 import { chatApi, planApi, socialApi } from '../services/apiServices';
-import { clearBadgeCountAsync, setBadgeCountAsync } from '../services/notificationService';
+import { clearBadgeCountAsync, setBadgeCountAsync, setNotificationChatActive } from '../services/notificationService';
 import { chatReadStorage, chatStorage } from '../services/storage';
 import { wsService } from '../services/websocket';
 import { ChatMessage, ProposedWorkoutItem, TokenUsage } from '../types/chat';
@@ -18,6 +18,8 @@ interface CoachChatContextType {
   error: string | null;
   tokenUsage: TokenUsage | null;
   unreadCount: number;
+  isChatActive: boolean;
+  setChatActive: (active: boolean) => void;
   markAsRead: () => Promise<void>;
   refreshMessages: () => Promise<void>;
   sendMessage: (text: string, imagesBase64?: string[]) => Promise<void>;
@@ -161,19 +163,39 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
   const { user, isAuthenticated, refreshUser } = useUser();
 
   const messagesRef = useRef<ChatMessage[]>(messages);
+  const isChatActiveRef = useRef<boolean>(false);
+  const isAppActiveRef = useRef<boolean>(AppState.currentState === 'active');
+  const [isChatActive, setIsChatActiveState] = useState<boolean>(false);
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  // Synchronize chat messages and unread state when the app returns to foreground
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && isAuthenticated && user?.id) {
-        refreshMessages();
-      }
-    });
-    return () => sub.remove();
-  }, [isAuthenticated, user?.id]);
+  const markAsRead = useCallback(async () => {
+    let maxMsgTime = 0;
+    for (const m of messagesRef.current) {
+      if (m.id === 'welcome-msg') continue;
+      const t = new Date(m.timestamp || 0).getTime();
+      if (!isNaN(t) && t > maxMsgTime) maxMsgTime = t;
+    }
+    const now = Math.max(Date.now(), maxMsgTime + 1000);
+    setLastReadTimestamp((prev) => (now > prev ? now : prev));
+    setUnreadCount(0);
+    if (user?.id) {
+      await chatReadStorage.setLastReadTimestamp(now, user.id);
+    }
+    await clearBadgeCountAsync();
+  }, [user?.id]);
+
+  const setChatActive = useCallback((active: boolean) => {
+    isChatActiveRef.current = active;
+    setIsChatActiveState(active);
+    setNotificationChatActive(active);
+    if (active && isAppActiveRef.current) {
+      markAsRead();
+    }
+  }, [markAsRead]);
+
 
   // Load last read timestamp and chat history when user changes or signs out
   useEffect(() => {
@@ -225,6 +247,26 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       clearBadgeCountAsync();
       return;
     }
+
+    // If the user is actively viewing the chat screen in the foreground,
+    // all incoming messages are instantly marked as read in real time.
+    if (isChatActiveRef.current && isAppActiveRef.current) {
+      let maxMsgTime = 0;
+      for (const m of messages) {
+        if (m.id === 'welcome-msg') continue;
+        const t = new Date(m.timestamp || 0).getTime();
+        if (!isNaN(t) && t > maxMsgTime) maxMsgTime = t;
+      }
+      const now = Math.max(Date.now(), maxMsgTime + 1000);
+      setLastReadTimestamp((prev) => (now > prev ? now : prev));
+      setUnreadCount(0);
+      if (user?.id) {
+        chatReadStorage.setLastReadTimestamp(now, user.id);
+      }
+      clearBadgeCountAsync();
+      return;
+    }
+
     const unread = messages.filter((m) => {
       if (m.id === 'welcome-msg') return false;
       if (m.role !== 'coach' && m.role !== 'assistant') return false;
@@ -238,21 +280,7 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
     } else {
       setBadgeCountAsync(unread);
     }
-  }, [messages, lastReadTimestamp, isReadInitialized]);
-
-  const markAsRead = useCallback(async () => {
-    let maxMsgTime = 0;
-    for (const m of messagesRef.current) {
-      if (m.id === 'welcome-msg') continue;
-      const t = new Date(m.timestamp || 0).getTime();
-      if (!isNaN(t) && t > maxMsgTime) maxMsgTime = t;
-    }
-    const now = Math.max(Date.now(), maxMsgTime + 1000);
-    setLastReadTimestamp((prev) => (now > prev ? now : prev));
-    setUnreadCount(0);
-    await chatReadStorage.setLastReadTimestamp(now, user?.id);
-    await clearBadgeCountAsync();
-  }, [user?.id]);
+  }, [messages, lastReadTimestamp, isReadInitialized, isChatActive, user?.id]);
 
   const setMessages = useCallback((action: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
     setMessagesState((prev) => {
@@ -369,6 +397,29 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [isAuthenticated, user?.id, processMessageItem, setMessages]);
 
+  // Synchronize chat messages, active status, and unread state across app state transitions
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextAppState) => {
+      const isNowActive = nextAppState === 'active';
+      isAppActiveRef.current = isNowActive;
+      if (isNowActive) {
+        if (isAuthenticated && user?.id) {
+          refreshMessages();
+          if (isChatActiveRef.current) {
+            markAsRead();
+          }
+        }
+      } else {
+        // App is moving to background or becoming inactive
+        if (isChatActiveRef.current) {
+          markAsRead();
+          clearBadgeCountAsync();
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [isAuthenticated, user?.id, markAsRead, refreshMessages]);
+
   const sendMessage = async (text: string, imagesBase64?: string[]) => {
     if (!text.trim() && (!imagesBase64 || imagesBase64.length === 0)) return;
 
@@ -478,6 +529,9 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     } finally {
       setSending(false);
+      if (isChatActiveRef.current && isAppActiveRef.current) {
+        markAsRead();
+      }
     }
   };
 
@@ -801,12 +855,6 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       refreshMessages();
     });
 
-    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        refreshMessages();
-      }
-    });
-
     return () => {
       unsubCoachResponse();
       unsubChatMessage();
@@ -815,7 +863,6 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
       unsubChatImageFailed();
       unsubUnreadMessage();
       subNotification.remove();
-      appStateSub.remove();
     };
   }, [isAuthenticated]);
 
@@ -828,6 +875,8 @@ export const CoachChatStore: React.FC<{ children: ReactNode }> = ({ children }) 
         error,
         tokenUsage,
         unreadCount,
+        isChatActive,
+        setChatActive,
         markAsRead,
         refreshMessages,
         sendMessage,

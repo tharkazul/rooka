@@ -300,6 +300,7 @@ export default function CoachScreen() {
     tokenUsage,
     error,
     markAsRead,
+    setChatActive,
   } = useCoachChat();
   const { user } = useUser();
   const { presentPaywall } = useSubscription();
@@ -409,6 +410,7 @@ export default function CoachScreen() {
       isPinnedToBottom.current = true;
       setShowScrollDownBtn(false);
       scrollToBottom(false);
+      setChatActive(true);
       markAsRead();
       refreshMessages();
       // Chat never hides the bar itself, so make sure it is up on arrival:
@@ -417,9 +419,10 @@ export default function CoachScreen() {
       notifyScrollEnd?.();
 
       return () => {
+        setChatActive(false);
         markAsRead();
       };
-    }, [scrollToBottom, markAsRead, notifyScrollEnd, refreshMessages])
+    }, [scrollToBottom, markAsRead, notifyScrollEnd, refreshMessages, setChatActive])
   );
 
   // 5. NEW MESSAGE WHILE PINNED

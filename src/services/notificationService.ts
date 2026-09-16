@@ -8,18 +8,42 @@ import { router } from 'expo-router';
 
 let Notifications: typeof NotificationsType | null = null;
 
+let isChatScreenActive = false;
+
+export function setNotificationChatActive(active: boolean) {
+  isChatScreenActive = active;
+}
+
 try {
   Notifications = require('expo-notifications');
   if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
     // Configure foreground notification presentation behavior
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
+      handleNotification: async (notification) => {
+        const data = notification?.request?.content?.data;
+        const isCoachMsg =
+          data?.type === 'coach' ||
+          data?.type === 'message' ||
+          (typeof data?.url === 'string' && data.url.includes('coach'));
+
+        if (isCoachMsg && isChatScreenActive) {
+          return {
+            shouldShowAlert: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+            shouldShowBanner: false,
+            shouldShowList: false,
+          };
+        }
+
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        };
+      },
     });
   }
 } catch (e: any) {
