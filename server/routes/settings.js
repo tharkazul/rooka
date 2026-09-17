@@ -6,6 +6,8 @@ const multer = require("multer");
 const db = require("../services/db");
 const { authenticateToken } = require("../services/auth");
 const { getRookaLevelInfo } = require("../services/utils");
+const athleteZones = require("../services/athleteZones");
+const zoneModel = require("../services/zones");
 
 const profileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -151,8 +153,15 @@ router.get("/api/user/settings", authenticateToken, (req, res) => {
       db.get(
         `SELECT name, date, target_ctl, goal_type, target_mode, target_value, target_weight, target_vo2max FROM milestones WHERE user_id = ? AND is_main = 1 ORDER BY date DESC LIMIT 1`,
         [req.user.id],
-        (mErr, mRow) => {
+        async (mErr, mRow) => {
+          let needsZoneSetup = true;
+          try {
+            const resolved = await athleteZones.resolveZonesForUser(req.user.id, 'default');
+            needsZoneSetup = !resolved.hrZones && !resolved.powerZones;
+          } catch (_) {}
+
           res.json({
+            needsZoneSetup,
             id: row.id,
             username: row.username,
             email: row.email,
@@ -206,6 +215,106 @@ router.get("/api/user/settings", authenticateToken, (req, res) => {
     },
   );
 });
+
+// --- TRAINING ZONES -------------------------------------------------------
+
+// Every table the athlete has, plus what the defaults were derived from.
+router.get("/api/user/zones", authenticateToken, async (req, res) => {
+  try {
+    const sport = req.query.sport || "default";
+    const resolved = await athleteZones.resolveZonesForUser(req.user.id, sport);
+    db.all(
+      `SELECT sport, kind, zones_json, source, updated_at FROM athlete_zones WHERE user_id = ?`,
+      [req.user.id],
+      (err, rows) => {
+        const tables = (rows || []).map((r) => ({
+          sport: r.sport,
+          kind: r.kind,
+          source: r.source,
+          updatedAt: r.updated_at,
+          zones: (() => {
+            try { return JSON.parse(r.zones_json); } catch (_) { return []; }
+          })(),
+        }));
+        res.json({
+          sport,
+          hrZones: resolved.hrZones,
+          powerZones: resolved.powerZones,
+          maxHr: resolved.maxHr,
+          ftp: resolved.ftp,
+          tables,
+        });
+      }
+    );
+  } catch (e) {
+    console.error("Failed to load zones:", e);
+    res.status(500).json({ error: "Failed to load training zones" });
+  }
+});
+
+// Save one table. `sport` may be 'default' or any sport name, which is how a
+// separate Swim or Bike table gets added without a schema change.
+router.put("/api/user/zones", authenticateToken, async (req, res) => {
+  const { sport = "default", kind, zones } = req.body || {};
+  if (kind !== "hr" && kind !== "power") {
+    return res.status(400).json({ error: "kind must be 'hr' or 'power'" });
+  }
+  if (!Array.isArray(zones) || zones.length === 0) {
+    return res.status(400).json({ error: "zones must be a non-empty array" });
+  }
+  const clean = zones
+    .map((z) => ({
+      zone: Number(z.zone),
+      min: Number(z.min),
+      max: z.max == null || z.max === "" ? null : Number(z.max),
+    }))
+    .filter((z) => z.zone > 0 && !isNaN(z.min));
+
+  if (clean.length === 0) {
+    return res.status(400).json({ error: "No valid zone rows supplied" });
+  }
+  // Boundaries must climb, otherwise zoneOf() would resolve unpredictably.
+  clean.sort((a, b) => a.zone - b.zone);
+  for (let i = 1; i < clean.length; i++) {
+    if (clean[i].min < clean[i - 1].min) {
+      return res.status(400).json({ error: "Zone lower bounds must increase" });
+    }
+  }
+
+  try {
+    await athleteZones.saveZones(req.user.id, sport, kind, clean, "manual");
+    res.json({ success: true, sport, kind, zones: clean });
+  } catch (e) {
+    console.error("Failed to save zones:", e);
+    res.status(500).json({ error: "Failed to save training zones" });
+  }
+});
+
+// Drop a sport-specific table and fall back to the default one.
+router.delete("/api/user/zones/:sport", authenticateToken, async (req, res) => {
+  if (req.params.sport === "default") {
+    return res.status(400).json({ error: "The default table cannot be removed" });
+  }
+  await athleteZones.deleteZones(req.user.id, req.params.sport);
+  res.json({ success: true });
+});
+
+// Rebuild a table from max HR / FTP, discarding manual edits.
+router.post("/api/user/zones/reset", authenticateToken, async (req, res) => {
+  const { sport = "default" } = req.body || {};
+  try {
+    const { maxHr, ftp } = await athleteZones.resolveZonesForUser(req.user.id, sport);
+    const hr = zoneModel.buildHrZones(maxHr);
+    const power = zoneModel.buildPowerZones(ftp);
+    if (hr) await athleteZones.saveZones(req.user.id, sport, "hr", hr, "derived");
+    if (power) await athleteZones.saveZones(req.user.id, sport, "power", power, "derived");
+    res.json({ success: true, hrZones: hr, powerZones: power, maxHr, ftp });
+  } catch (e) {
+    console.error("Failed to reset training zones:", e);
+    res.status(500).json({ error: "Failed to reset training zones" });
+  }
+});
+
 
 router.post("/api/user/settings/account", authenticateToken, (req, res) => {
   const { email } = req.body;
@@ -374,7 +483,7 @@ router.delete('/api/user/account', authenticateToken, (req, res) => {
             "physique_logs", "milestones", "kudos", "public_profile_cache", 
             "completed_micro_steps", "push_subscriptions", "garmin_health_data", 
             "user_titles", "athlete_niggles", "bonus_points", "recurring_trainings",
-            "benchmark_tests"
+            "benchmark_tests", "athlete_zones"
         ];
 
         db.serialize(() => {
